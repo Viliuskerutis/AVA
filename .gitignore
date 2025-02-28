@@ -1,0 +1,39 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment folders (virtualenv, venv)
+venv/
+.env/
+.venv/
+env/
+Pipfile
+Pipfile.lock
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# IDE settings (if you're using PyCharm, VSCode, etc.)
+.vscode/
+.idea/
+
+# System files (macOS, Windows, Linux)
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Ignore everything inside these folders
+data/additional_data/*
+data/csvs/*
+data/images/*
+
+# But keep the folders themselves
+!data/additional_data/.gitkeep
+!data/csvs/.gitkeep
+!data/images/.gitkeep
+
+# Ignore any .pkl files
+*.pkl

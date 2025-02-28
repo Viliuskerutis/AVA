@@ -1,0 +1,21 @@
+from price_prediction.base_regressor import BaseRegressor
+import numpy as np
+from lightgbm import LGBMRegressor
+
+
+class LightGBMRegressor(BaseRegressor):
+    """LightGBM Regressor."""
+
+    def __init__(self, n_estimators=500, **kwargs):
+        super().__init__(n_estimators=n_estimators, **kwargs)
+
+        self.model = LGBMRegressor(n_estimators=n_estimators, random_state=42, **kwargs)
+
+    def clear_fit(self):
+        self.model = LGBMRegressor(**self.params)
+
+    def train(self, X_train, y_train):
+        self.model.fit(X_train, y_train, eval_metric="mae")
+
+    def predict(self, X_test: np.ndarray) -> np.ndarray:
+        return self.model.predict(X_test)
