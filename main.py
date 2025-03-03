@@ -119,5 +119,5 @@ if __name__ == "__main__":
 
         predicted_price = predict_price(random_painting_data)
 
-        print(f"Random Painting Sold Price: {random_painting_data["Sold Price"]}")
+        print(f'Random Painting Sold Price: {random_painting_data["Sold Price"]}')
         print(f"Predicted Sold Price: {predicted_price:.2f}")

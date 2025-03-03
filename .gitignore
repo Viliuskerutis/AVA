@@ -37,3 +37,6 @@ data/images/*
 
 # Ignore any .pkl files
 *.pkl
+
+# Ignore env files
+.env
