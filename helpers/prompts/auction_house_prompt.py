@@ -23,7 +23,7 @@ You must respond as a valid JSON object following this schema:
     "Average Time to Sell": int,                        // Average time it takes to sell a listed artwork.
     "Repeat Buyer Percentage": int,                     // Percentage of buyers who have purchased multiple artworks (%).
     "Average Seller Premium Percentage": int,           // Typical seller fee charged by the auction house (%).
-    "Auction Type Preference": string,                  // Most frequent auction type (e.g. "Live", "Online", "Hybrid").
+    "Auction Type Preference": "string",                // Most frequent auction type (e.g. "Live", "Online", "Hybrid").
     "Auction House Global Rank": int,                   // 0-10 rank of overall importance in the global art market.
     "Prestige Rank": int,                               // 0-10 rank of historical significance and reputation among collectors.
     "Specialization Score": int,                        // 0-10 score of focus on high-value fine art vs general items (higher means expensive).
@@ -33,13 +33,13 @@ You must respond as a valid JSON object following this schema:
     "Liquidity Score": int,                             // 0-10 score of how often listed artworks actually sell vs remain unsold.
 
     "Score Explanations": dict {{                       // Short explanation (max 20 words) for each score.
-        "Auction House Global Rank": string,
-        "Prestige Rank": string,
-        "Specialization Score": string,
-        "International Presence Rank": string,
-        "Marketing Power Rank": string,
-        "Average Buyer Competition Score": string,
-        "Liquidity Score": string
+        "Auction House Global Rank": "string",
+        "Prestige Rank": "string",
+        "Specialization Score": "string",
+        "International Presence Rank": "string",
+        "Marketing Power Rank": "string",
+        "Average Buyer Competition Score": "string",
+        "Liquidity Score": "string"
     }}
 }}
 Always return only valid JSON — no explanations, headers, or extra text before or after the JSON object.
