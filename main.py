@@ -12,13 +12,24 @@ from config import (
     OPTIMAL_SIMILARITY_THRESHOLD,
 )
 
+from data_processing.data_filter_pipeline import (
+    DataFilterPipeline,
+    process_for_image_similarity,
+    process_for_predictions,
+)
 from image_similarity.model_loader import ModelLoader
 from image_similarity.feature_extractor import FeatureExtractor
 from image_similarity.similarity_checker import SimilarityChecker
 from helpers.file_manager import FileManager
 from price_prediction.embedding_model_type import EmbeddingModelType
-from price_prediction.lightgbm_regressor import LightGBMRegressor
 from price_prediction.painting_price_predictor import PaintingPricePredictor
+from price_prediction.regressors.knn_regressor import KNNRegressor
+from price_prediction.regressors.lightgbm_regressor import LightGBMRegressor
+import pandas as pd
+
+from price_prediction.regressors.random_forest_regressor import (
+    RandomForestCustomRegressor,
+)
 
 
 def try_find_most_similar(
@@ -58,13 +69,9 @@ def try_find_most_similar(
 
 
 def predict_price(
+    data_df: pd.DataFrame,
     painting_data_dict: Dict[str, str],
 ) -> float:
-    # filtered_data_df = process_initial_cleanup(data_df, image_path_dict)
-    # === SOME LOGIC TO CONVERT COLUMNS === (WILL BE ADDED LATER, LOADING PRESET FILE INSTEAD)
-
-    filtered_final_df = FileManager.read_single_csv(COMBINED_INFORMATION_CSV_PATH)
-
     # knn_regressor = KNNRegressor(n_neighbors=5)
     # random_forest_regressor = RandomForestCustomRegressor(n_estimators=10)
     lightgbm_regressor = LightGBMRegressor(n_estimators=500)
@@ -81,9 +88,9 @@ def predict_price(
     )
 
     # For experimentation
-    # print(predictor.predict_with_test_split(filtered_final_df))
+    # print(predictor.predict_with_test_split(data_df))
 
-    predictor.train(filtered_final_df)
+    predictor.train(data_df)
 
     predicted_price = predictor.predict_single_painting(painting_data_dict)
 
@@ -94,10 +101,16 @@ if __name__ == "__main__":
     # First part - if identical image exists, return data (price) of painting
     image_path_dict = FileManager.get_full_image_paths(IMAGES_PATH)
     data_df = FileManager.read_all_csvs(CSVS_PATH)
+
+    # Keep values that have price, remove non-existant images, remove duplicate photo ids, remove low quality
+    data_for_similarity_df = process_for_image_similarity(data_df, image_path_dict)
+
     # This should be the path of user input image from UI (temporarily picking random image from dataset)
     input_image_path = FileManager.get_random_image_path(IMAGES_PATH)
-    most_similar = try_find_most_similar(image_path_dict, data_df, input_image_path)
-    if most_similar is not None:
+    most_similar = try_find_most_similar(
+        image_path_dict, data_for_similarity_df, input_image_path
+    )
+    if most_similar:
         title = most_similar["Painting name"].values[0]
         artist = most_similar["Artist name"].values[0]
         price = most_similar["Sold Price"].values[0]
@@ -110,14 +123,15 @@ if __name__ == "__main__":
 
     force_prediction = True  # Temporary variable to force price prediction even if identical painting is found
     # Second part - if identical image doesn't exist, try predict price using regressors
-    if most_similar is None or price == "Not Sold" or force_prediction:
-        # This should be the data of painting from UI (temporarily picking random entry from dataset)
+    if most_similar is None or force_prediction:
         # In current implementation it is expected that image from `input_image_path` exists in data folder
-        # It will need to be additionally filtered/modified to allow feature engineering
-        filtered_final_df = FileManager.read_single_csv(COMBINED_INFORMATION_CSV_PATH)
-        random_painting_data = filtered_final_df.sample(n=1).iloc[0].to_dict()
+        # User input data should be passed trough processing pipeline before use
+        data_for_prediction_df = process_for_predictions(data_df)
 
-        predicted_price = predict_price(random_painting_data)
+        # This should be the user painting information from UI (temporarily picking random value)
+        random_painting_data = data_for_prediction_df.sample(n=1).iloc[0].to_dict()
+
+        predicted_price = predict_price(data_for_prediction_df, random_painting_data)
 
         print(f'Random Painting Sold Price: {random_painting_data["Sold Price"]}')
         print(f"Predicted Sold Price: {predicted_price:.2f}")
