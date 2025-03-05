@@ -1,6 +1,7 @@
-from price_prediction.base_regressor import BaseRegressor
 import numpy as np
 from lightgbm import LGBMRegressor
+
+from price_prediction.regressors.base_regressor import BaseRegressor
 
 
 class LightGBMRegressor(BaseRegressor):

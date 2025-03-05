@@ -13,8 +13,8 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 
 from helpers.file_manager import FileManager
-from price_prediction.base_regressor import BaseRegressor
 from price_prediction.embedding_model_type import EmbeddingModelType
+from price_prediction.regressors.base_regressor import BaseRegressor
 
 
 class PaintingPricePredictor:

@@ -1,6 +1,7 @@
-from price_prediction.base_regressor import BaseRegressor
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
+
+from price_prediction.regressors.base_regressor import BaseRegressor
 
 
 class RandomForestCustomRegressor(BaseRegressor):
