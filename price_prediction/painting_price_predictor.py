@@ -13,6 +13,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 
 from helpers.file_manager import FileManager
+from helpers.property_modifier import PropertyModifier
 from price_prediction.embedding_model_type import EmbeddingModelType
 from price_prediction.regressors.base_regressor import BaseRegressor
 
@@ -21,6 +22,8 @@ class PaintingPricePredictor:
     """
     Handles painting price prediction with preprocessing, feature extraction, and regressor selection.
     """
+
+    # TODO: Handle count columns + synthetic columns + cleanup to reduce need for hardcoded values
 
     NUMERIC_COLUMNS = [
         "Width",
@@ -67,19 +70,27 @@ class PaintingPricePredictor:
         encode_per_column: bool,
         use_artfacts: bool,
         use_images: int,
+        use_count: bool,
+        use_synthetic: bool,
         embedding_model_type: EmbeddingModelType,
         artist_info_path: str,
         image_features_path: str,
+        artist_count_path: str,
+        synthetic_paths: List[str],
     ):
         self.regressor = regressor
         self.use_separate_numeric_features = use_separate_numeric_features
         self.encode_per_column = encode_per_column
         self.use_artfacts = use_artfacts
         self.use_images = use_images
+        self.use_count = use_count
+        self.use_synthetic = use_synthetic
         self.model = SentenceTransformer(embedding_model_type.value)
 
         self.artist_info_path = artist_info_path
         self.image_features_path = image_features_path
+        self.artist_count_path = artist_count_path
+        self.synthetic_paths = synthetic_paths
 
     def fill_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -202,14 +213,39 @@ class PaintingPricePredictor:
         """
         Applies the full preprocessing pipeline: filling missing data, removing outliers, adding images, and enriching with artist data.
         """
-        df = self.fill_missing_values(df)
         df = self.remove_price_outliers(df)
 
         if self.use_images:
             df = self.add_image_features(df)
 
         if self.use_artfacts:
-            df = self.add_artist_data(df)
+            # df = self.add_artist_data(df)
+            df = PropertyModifier.add_additional_data(
+                df, "Artist name", self.artist_info_path, "Name"
+            )
+
+        if self.use_count:
+            df = PropertyModifier.add_additional_data(
+                df, "Artist name", self.artist_count_path, "name", ["path"]
+            )
+
+        if self.use_synthetic:
+            df = PropertyModifier.add_additional_data(
+                df,
+                "Artist name",
+                self.synthetic_paths[0],
+                "Artist name",
+                ["Score Explanations"],
+            )
+            df = PropertyModifier.add_additional_data(
+                df,
+                "Auction House",
+                self.synthetic_paths[1],
+                "Auction House",
+                ["Score Explanations"],
+            )
+
+        df = self.fill_missing_values(df)
 
         return df
 

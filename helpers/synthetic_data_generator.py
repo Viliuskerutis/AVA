@@ -11,7 +11,7 @@ from helpers.file_manager import FileManager
 from helpers.prompts.artist_prompt import ArtistPrompt
 from helpers.prompts.auction_house_prompt import AuctionHousePrompt
 from helpers.prompts.base_prompt import BasePrompt
-from helpers.property_extractor import PropertyExtractor
+from helpers.property_modifier import PropertyModifier
 
 
 class SyntheticDataGenerator:
@@ -326,7 +326,7 @@ if __name__ == "__main__":
         pending_batches_file=pending_batch_file_path,
     )
 
-    artists = PropertyExtractor.get_unique_dataframe(data_to_enrich, "Artist name")
+    artists = PropertyModifier.get_unique_dataframe(data_to_enrich, "Artist name")
     # artists_enriched = generator.try_enrich_dataframe(
     #     artists, ArtistPrompt(), try_wait=False
     # )
@@ -335,7 +335,7 @@ if __name__ == "__main__":
     #         f"{ADDITIONAL_DATA_PATH}/artists_{timestamp}.csv", sep=";"
     #     )
 
-    auction_houses = PropertyExtractor.get_unique_dataframe(
+    auction_houses = PropertyModifier.get_unique_dataframe(
         data_to_enrich, "Auction House"
     )
     # auction_houses_enriched = generator.try_enrich_dataframe(

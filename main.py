@@ -2,8 +2,10 @@ from typing import Dict
 from pandas import DataFrame
 from tqdm import tqdm
 from config import (
+    ARTIST_COUNT_CSV_PATH,
     ARTIST_INFORMATION_CSV_PATH,
-    COMBINED_INFORMATION_CSV_PATH,
+    ARTIST_SYNTHETIC_CSV_PATH,
+    AUCTION_HOUSE_SYNTHETIC_CSV_PATH,
     IMAGE_FEATURES_PKL_PATH,
     IMAGES_PATH,
     CSVS_PATH,
@@ -13,7 +15,6 @@ from config import (
 )
 
 from data_processing.data_filter_pipeline import (
-    DataFilterPipeline,
     process_for_image_similarity,
     process_for_predictions,
 )
@@ -26,7 +27,6 @@ from price_prediction.painting_price_predictor import PaintingPricePredictor
 from price_prediction.regressors.knn_regressor import KNNRegressor
 from price_prediction.regressors.lightgbm_regressor import LightGBMRegressor
 import pandas as pd
-
 from price_prediction.regressors.random_forest_regressor import (
     RandomForestCustomRegressor,
 )
@@ -82,13 +82,17 @@ def predict_price(
         encode_per_column=True,
         use_artfacts=True,
         use_images=0,
+        use_count=True,
+        use_synthetic=True,
         embedding_model_type=EmbeddingModelType.ALL_MINILM,
         artist_info_path=ARTIST_INFORMATION_CSV_PATH,
         image_features_path=IMAGE_FEATURES_PKL_PATH,
+        artist_count_path=ARTIST_COUNT_CSV_PATH,
+        synthetic_paths=[ARTIST_SYNTHETIC_CSV_PATH, AUCTION_HOUSE_SYNTHETIC_CSV_PATH],
     )
 
     # For experimentation
-    # print(predictor.predict_with_test_split(data_df))
+    print(predictor.predict_with_test_split(data_df))
 
     predictor.train(data_df)
 
@@ -110,7 +114,7 @@ if __name__ == "__main__":
     most_similar = try_find_most_similar(
         image_path_dict, data_for_similarity_df, input_image_path
     )
-    if most_similar:
+    if most_similar is not None:
         title = most_similar["Painting name"].values[0]
         artist = most_similar["Artist name"].values[0]
         price = most_similar["Sold Price"].values[0]
