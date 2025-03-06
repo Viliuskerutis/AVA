@@ -5,6 +5,7 @@ from data_processing.filter_strategies import (
     LowQualityImageFilter,
     MissingImageFilter,
     OutlierPriceFilter,
+    PriceRangeFilter,
 )
 
 
@@ -57,6 +58,10 @@ def process_for_predictions(df):
     pipeline.add_step(InvalidSoldPriceFilter())
 
     pipeline.add_step(InitialCleanupFilter())
+
+    pipeline.add_step(
+        PriceRangeFilter(min_price=None, max_price=None)
+    )  # Keep at `None` for no filtering
 
     pipeline.add_step(OutlierPriceFilter("iqr", 1.5))
 

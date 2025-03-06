@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 import numpy as np
 import pandas as pd
 from PIL import Image
@@ -382,6 +383,50 @@ class OutlierPriceFilter(BaseFilter):
             return np.nan
         try:
             # Remove euro symbol and commas then convert to float
+            return float(str(price).replace("€", "").replace(",", "").strip())
+        except ValueError:
+            return np.nan
+
+
+class PriceRangeFilter(BaseFilter):
+    """
+    Keeps only rows where 'Sold Price' falls within a specified range [min_price, max_price].
+    """
+
+    def __init__(
+        self, min_price: Optional[float] = None, max_price: Optional[float] = None
+    ):
+        """
+        :param min_price: Minimum price to keep (inclusive). Use None for no lower bound.
+        :param max_price: Maximum price to keep (inclusive). Use None for no upper bound.
+        """
+        self.min_price = min_price
+        self.max_price = max_price
+
+    def apply(self, df: pd.DataFrame) -> pd.DataFrame:
+        if "Sold Price" not in df.columns:
+            raise KeyError("The DataFrame must contain a 'Sold Price' column.")
+
+        # Convert Sold Price to numeric values
+        df_clean = df.copy()
+        df_clean["Sold Price"] = df_clean["Sold Price"].apply(self._convert_to_numeric)
+
+        # Apply range filter
+        if self.min_price is not None:
+            df_clean = df_clean[df_clean["Sold Price"] >= self.min_price]
+
+        if self.max_price is not None:
+            df_clean = df_clean[df_clean["Sold Price"] <= self.max_price]
+
+        return df_clean.reset_index(drop=True)
+
+    @staticmethod
+    def _convert_to_numeric(price):
+        if pd.isna(price) or (
+            isinstance(price, str) and price.strip().lower() == "not sold"
+        ):
+            return np.nan
+        try:
             return float(str(price).replace("€", "").replace(",", "").strip())
         except ValueError:
             return np.nan
