@@ -1,5 +1,6 @@
 import pandas as pd
 import unicodedata
+from pandas.api.types import is_numeric_dtype
 
 from helpers.file_manager import FileManager
 
@@ -32,41 +33,44 @@ class PropertyModifier:
         csv_path: str,
         csv_column: str,
         columns_to_exclude: list[str] = [],
-    ):
-        def normalize_name(value):
+    ) -> tuple[pd.DataFrame, list[str], list[str]]:
+        def normalize_key(value):
             value = str(value)
-
             # Remove accents
             value = unicodedata.normalize("NFKD", value)
             value = "".join(c for c in value if not unicodedata.combining(c))
-
             # Remove dots, dashes, etc.
             value = value.replace(".", "").replace("-", " ")
-
-            # Lowercase and split into words
+            # Lowercase and sort words alphabetically
             words = value.lower().split()
-
-            # Sort words alphabetically and rejoin
             return " ".join(sorted(words))
 
         extra_data = FileManager.read_single_csv(csv_path)
 
-        columns_to_exclude = set(columns_to_exclude)  # Handle duplicates
-        columns_to_exclude.discard(
-            csv_column
-        )  # Always keep the match column for merging
-
+        columns_to_exclude = set(columns_to_exclude)
+        columns_to_exclude.discard(csv_column)
         extra_data = extra_data.drop(
             columns=[col for col in columns_to_exclude if col in extra_data.columns]
         )
 
-        df["match_key"] = df[df_column].apply(normalize_name)
-        extra_data["match_key"] = extra_data[csv_column].apply(normalize_name)
+        extra_columns = [col for col in extra_data.columns if col != csv_column]
+        extra_text_cols = []
+        extra_numeric_cols = []
+        for col in extra_columns:
+            if is_numeric_dtype(extra_data[col]):
+                extra_numeric_cols.append(col)
+            else:
+                extra_text_cols.append(col)
 
+        # Create a normalized key for joining
+        df["match_key"] = df[df_column].apply(normalize_key)
+        extra_data["match_key"] = extra_data[csv_column].apply(normalize_key)
+
+        # Drop the merge column and join on the match key
         extra_data = extra_data.drop(columns=[csv_column])
         extra_data = extra_data.set_index("match_key")
         df = df.set_index("match_key")
         df = df.join(extra_data, how="left")
         df = df.reset_index(drop=True)
 
-        return df
+        return df, extra_text_cols, extra_numeric_cols

@@ -36,16 +36,6 @@ class PaintingPricePredictor:
         "Max Sold Price",
     ]
 
-    ARTFACTS_NUMERIC_COLUMNS = [
-        "Birth Year",
-        "Death Year",
-        "Verified Exhibitions",
-        "Solo Exhibitions",
-        "Group Exhibitions",
-        "Biennials",
-        "Art Fairs",
-    ]
-
     TEXT_COLUMNS = [
         "Artist name",
         "Auction House",
@@ -53,14 +43,6 @@ class PaintingPricePredictor:
         "Materials",
         "Surface",
         "Signed",
-    ]
-
-    ARTFACTS_TEXT_COLUMNS = [
-        "Ranking",
-        "Birth Country",
-        "Gender",
-        "Nationality",
-        "Movement",
     ]
 
     def __init__(
@@ -91,6 +73,9 @@ class PaintingPricePredictor:
         self.image_features_path = image_features_path
         self.artist_count_path = artist_count_path
         self.synthetic_paths = synthetic_paths
+
+        self.additional_text_columns = []
+        self.additional_numeric_columns = []
 
     def fill_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -175,12 +160,8 @@ class PaintingPricePredictor:
         """
         Generates combined text + numeric embeddings from the dataframe.
         """
-        text_columns = self.TEXT_COLUMNS + (
-            self.ARTFACTS_TEXT_COLUMNS if self.use_artfacts else []
-        )
-        numeric_columns = self.NUMERIC_COLUMNS + (
-            self.ARTFACTS_NUMERIC_COLUMNS if self.use_artfacts else []
-        )
+        text_columns = self.TEXT_COLUMNS + self.additional_text_columns
+        numeric_columns = self.NUMERIC_COLUMNS + self.additional_numeric_columns
 
         if self.use_images:
             numeric_columns += [f"Image_Feature_{i+1}" for i in range(self.use_images)]
@@ -211,42 +192,61 @@ class PaintingPricePredictor:
 
     def preprocess_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Applies the full preprocessing pipeline: filling missing data, removing outliers, adding images, and enriching with artist data.
+        Applies the full preprocessing pipeline: filling missing data, removing outliers,
+        adding images, and enriching with additional data.
         """
+        # Remove outliers first
         df = self.remove_price_outliers(df)
 
+        # Add image features if enabled
         if self.use_images:
             df = self.add_image_features(df)
 
+        # Reset the additional columns lists
+        self.additional_text_columns = []
+        self.additional_numeric_columns = []
+
+        # Add additional data dynamically
         if self.use_artfacts:
-            # df = self.add_artist_data(df)
-            df = PropertyModifier.add_additional_data(
-                df, "Artist name", self.artist_info_path, "Name"
+            df, art_text, art_numeric = PropertyModifier.add_additional_data(
+                df,
+                "Artist name",
+                self.artist_info_path,
+                "Name",
+                ["Birth Year", "Death Year"],
             )
+            self.additional_text_columns += art_text
+            self.additional_numeric_columns += art_numeric
 
         if self.use_count:
-            df = PropertyModifier.add_additional_data(
+            df, count_text, count_numeric = PropertyModifier.add_additional_data(
                 df, "Artist name", self.artist_count_path, "name", ["path"]
             )
+            self.additional_text_columns += count_text
+            self.additional_numeric_columns += count_numeric
 
         if self.use_synthetic:
-            df = PropertyModifier.add_additional_data(
+            df, synth_text, synth_numeric = PropertyModifier.add_additional_data(
                 df,
                 "Artist name",
                 self.synthetic_paths[0],
                 "Artist name",
                 ["Score Explanations"],
             )
-            df = PropertyModifier.add_additional_data(
+            self.additional_text_columns += synth_text
+            self.additional_numeric_columns += synth_numeric
+
+            df, synth_text2, synth_numeric2 = PropertyModifier.add_additional_data(
                 df,
                 "Auction House",
                 self.synthetic_paths[1],
                 "Auction House",
                 ["Score Explanations"],
             )
+            self.additional_text_columns += synth_text2
+            self.additional_numeric_columns += synth_numeric2
 
         df = self.fill_missing_values(df)
-
         return df
 
     def train(self, df: pd.DataFrame) -> None:
