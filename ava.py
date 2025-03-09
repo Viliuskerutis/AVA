@@ -56,19 +56,22 @@ def upload_file():
     )
 
     if most_similar is None:
-        # In current implementation it is expected that image from `input_image_path` exists in data folder
-        # User input data should be passed trough processing pipeline before use
-        data_for_prediction_df = process_for_predictions(data_df)
+        try:
+            # In current implementation it is expected that image from `input_image_path` exists in data folder
+            # User input data should be passed trough processing pipeline before use
+            data_for_prediction_df = process_for_predictions(data_df)
 
-        # This should be the user painting information from UI (temporarily picking random value)
-        random_painting_data = data_for_prediction_df.sample(n=1).iloc[0].to_dict()
+            # This should be the user painting information from UI (temporarily picking random value)
+            random_painting_data = data_for_prediction_df.sample(n=1).iloc[0].to_dict()
 
-        predicted_price = predict_price(data_for_prediction_df, random_painting_data)
+            predicted_price = predict_price(data_for_prediction_df, random_painting_data)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     if os.path.exists(file_path):
         os.remove(file_path)
     
-    return jsonify({"data": None if most_similar is None else most_similar.to_json(orient='records'), "price": most_similar["Sold Price"].values[0] if most_similar is not None else predicted_price, "message": "Exact image found inside the storage" if most_similar is not None else "Image price evaluated successfully"})
+    return jsonify({"data": None if most_similar is None else most_similar.to_json(orient='records'), "price": most_similar["Sold Price"].values[0] if most_similar is not None else predicted_price, "message": "Exact image found inside the storage" if most_similar is not None else "Image price evaluated successfully"}), 200
 
 # Start the server
 if __name__ == '__main__':
