@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from helpers.file_manager import FileManager
 from config import (
     IMAGES_PATH,
@@ -16,6 +17,9 @@ import os
 
 # Create a Flask application
 app = Flask(__name__)
+
+# Enable CORS for specific origins
+CORS(app, origins=["http://localhost:5173", "https://voi.lt", "https://artvaluation.app"])
 
 # Folder to save uploaded images
 UPLOAD_FOLDER = 'data/images/runtime'
