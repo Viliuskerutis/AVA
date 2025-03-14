@@ -75,7 +75,10 @@ def upload_file():
     if os.path.exists(file_path):
         os.remove(file_path)
     
-    return jsonify({"data": None if most_similar is None else most_similar.to_json(orient='records'), "price": most_similar["Sold Price"].values[0] if most_similar is not None else predicted_price, "message": "Exact image found inside the storage" if most_similar is not None else "Image price evaluated successfully"}), 200
+    return jsonify(
+	{"data": None if most_similar is None else most_similar.to_json(orient='records', force_ascii=False),
+    "price": most_similar["Sold Price"].values[0] if most_similar is not None else predicted_price,
+    "message": "Exact image found inside the storage" if most_similar is not None else "Image price evaluated successfully"}), 200
 
 # Start the server
 if __name__ == '__main__':

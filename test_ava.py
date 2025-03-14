@@ -7,10 +7,10 @@ url = "http://51.20.5.62:5000/evaluate"
 #file_path = "data/images/test/007.jpg"
 #file_path = "data/images/test/289.JPG"
 #file_path = "data/images/test/1333.JPG"
-file_path = "data/images/artprice/agata_bogacka-rzeczywlscle,_mkodzl_sa,_realistami_(przed_lustrem)-86.jpg"
+#file_path = "data/images/artprice/agata_bogacka-rzeczywlscle,_mkodzl_sa,_realistami_(przed_lustrem)-86.jpg"
 
 # This one exists inside the storage of paintings
-#file_path = "data/images/menorinka/Jonas-Mackevičius_Capri-salos-motyvas-su-žydinčia-visterija_48.jpg"
+file_path = "data/images/menorinka/Jonas-Mackevičius_Capri-salos-motyvas-su-žydinčia-visterija_48.jpg"
 #file_path = "data/images/menorinka/Solomonas-Teitelbaumas_Kelias-pro-žydintį-sodą_63.jpg"
 #file_path = "data/images/menorinka/Vytenis-Lingys_Dylantis-mėnulis_36.jpg"
 #file_path = "data/images/menorinka/Albert-Graefle_Moters-portretas_81.jpg"
