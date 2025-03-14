@@ -14,6 +14,7 @@ from main import (
     predict_price
 )
 import os
+import json
 
 # Create a Flask application
 app = Flask(__name__)
@@ -76,7 +77,7 @@ def upload_file():
         os.remove(file_path)
     
     return jsonify(
-	{"data": None if most_similar is None else most_similar.to_json(orient='records', force_ascii=False),
+	{"data": None if most_similar is None else json.loads(most_similar.to_json(orient='records', force_ascii=False)),
     "price": most_similar["Sold Price"].values[0] if most_similar is not None else predicted_price,
     "message": "Exact image found inside the storage" if most_similar is not None else "Image price evaluated successfully"}), 200
 
