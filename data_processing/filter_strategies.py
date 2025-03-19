@@ -388,6 +388,22 @@ class OutlierPriceFilter(BaseFilter):
             return np.nan
 
 
+class ArtorkCountFilter(BaseFilter):
+    def __init__(self, min_artwork_count: Optional[int] = None):
+        self.min_artwork_count = min_artwork_count
+
+    def apply(self, df: pd.DataFrame) -> pd.DataFrame:
+        if "Sold Price" not in df.columns:
+            raise KeyError("The DataFrame must contain a 'Sold Price' column.")
+
+        filtered_df = df.copy()
+
+        if self.min_artwork_count is not None:
+            filtered_df = filtered_df[filtered_df["count"] >= self.min_artwork_count]
+
+        return filtered_df.reset_index(drop=True)
+
+
 class PriceRangeFilter(BaseFilter):
     """
     Keeps only rows where 'Sold Price' falls within a specified range [min_price, max_price].

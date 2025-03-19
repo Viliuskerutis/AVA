@@ -12,6 +12,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 
+from data_processing.data_filter_pipeline import process_keep_relevant
 from helpers.file_manager import FileManager
 from helpers.property_modifier import PropertyModifier
 from price_prediction.embedding_model_type import EmbeddingModelType
@@ -195,9 +196,6 @@ class PaintingPricePredictor:
         Applies the full preprocessing pipeline: filling missing data, removing outliers,
         adding images, and enriching with additional data.
         """
-        # Remove outliers first
-        df = self.remove_price_outliers(df)
-
         # Add image features if enabled
         if self.use_images:
             df = self.add_image_features(df)
@@ -225,6 +223,14 @@ class PaintingPricePredictor:
             self.additional_text_columns += count_text
             self.additional_numeric_columns += count_numeric
 
+            # Additional logic to calculate artwork counts for Lithuanian artists as they're missing in CSV.
+            if "count" in df.columns:
+                artist_counts = df["Artist name"].value_counts()
+                missing_mask = df["count"].isna()
+                df.loc[missing_mask, "count"] = df.loc[missing_mask, "Artist name"].map(
+                    artist_counts
+                )
+
         if self.use_synthetic:
             df, synth_text, synth_numeric = PropertyModifier.add_additional_data(
                 df,
@@ -245,6 +251,15 @@ class PaintingPricePredictor:
             )
             self.additional_text_columns += synth_text2
             self.additional_numeric_columns += synth_numeric2
+
+        # TODO: Move hardcoded values
+        if self.use_count:
+            # Additional filtering to keep relevant features only (set to None to disable filter)
+            df = process_keep_relevant(
+                df, min_price=None, max_price=None, min_artwork_count=None
+            )
+        else:
+            df = process_keep_relevant(df, min_price=None, max_price=None)
 
         df = self.fill_missing_values(df)
         return df

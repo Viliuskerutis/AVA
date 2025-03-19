@@ -1,4 +1,5 @@
 from data_processing.filter_strategies import (
+    ArtorkCountFilter,
     DuplicateFilter,
     InitialCleanupFilter,
     InvalidSoldPriceFilter,
@@ -64,5 +65,21 @@ def process_for_predictions(df):
     )  # Keep at `None` for no filtering
 
     pipeline.add_step(OutlierPriceFilter("iqr", 1.5))
+    pipeline.add_step(OutlierPriceFilter("iqr", 1.5))
+
+    return pipeline.apply(df)
+
+
+def process_keep_relevant(
+    df,
+    min_price: float = None,
+    max_price: float = None,
+    min_artwork_count: int = None,
+):
+    pipeline = DataFilterPipeline()
+
+    pipeline.add_step(PriceRangeFilter(min_price, max_price))
+
+    pipeline.add_step(ArtorkCountFilter(min_artwork_count))
 
     return pipeline.apply(df)
