@@ -123,7 +123,7 @@ if __name__ == "__main__":
         data_for_prediction_df = process_for_predictions(data_df)
         # Additional filtering to keep relevant artists only (set possible price range for predictions for higher accuracy)
         data_for_prediction_df = process_keep_relevant(
-            data_for_prediction_df, min_price=100, max_price=2000
+            data_for_prediction_df, min_price=None, max_price=None
         )
 
         # Initialization of regressor and predictor can be done once when server is run
