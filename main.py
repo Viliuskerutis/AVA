@@ -9,6 +9,7 @@ from config import (
     IMAGE_FEATURES_PKL_PATH,
     IMAGES_PATH,
     CSVS_PATH,
+    REGRESSOR_PKL_PATH,
     SIMILARITY_MODEL_NAME,
     DEVICE,
     OPTIMAL_SIMILARITY_THRESHOLD,
@@ -71,19 +72,20 @@ def try_find_most_similar(
 def predict_price(
     data_df: pd.DataFrame,
     painting_data_dict: Dict[str, str],
+    force_retrain: bool = False,
 ) -> float:
-    # knn_regressor = KNNRegressor(n_neighbors=5)
-    # random_forest_regressor = RandomForestCustomRegressor(n_estimators=10)
-    lightgbm_regressor = LightGBMRegressor(n_estimators=500)
+    # regressor = KNNRegressor(n_neighbors=5)
+    # regressor = RandomForestCustomRegressor(n_estimators=10)
+    regressor = LightGBMRegressor(n_estimators=500)
 
     predictor = PaintingPricePredictor(
-        regressor=lightgbm_regressor,
+        regressor=regressor,
         use_separate_numeric_features=True,
         encode_per_column=True,
-        use_artfacts=True,
+        use_artfacts=False,
         use_images=0,
         use_count=True,
-        use_synthetic=True,
+        use_synthetic=False,
         embedding_model_type=EmbeddingModelType.ALL_MINILM,
         artist_info_path=ARTIST_INFORMATION_CSV_PATH,
         image_features_path=IMAGE_FEATURES_PKL_PATH,
@@ -91,10 +93,15 @@ def predict_price(
         synthetic_paths=[ARTIST_SYNTHETIC_CSV_PATH, AUCTION_HOUSE_SYNTHETIC_CSV_PATH],
     )
 
-    # For experimentation
-    print(predictor.predict_with_test_split(data_df))
+    # For experimentation (skips loading weights, retrains each time)
+    # print(predictor.predict_with_test_split(data_df))
 
-    predictor.train(data_df)
+    if force_retrain or not regressor.load_model(REGRESSOR_PKL_PATH):
+        print(
+            "No regressor model found or force retrain enabled. Training and saving new model..."
+        )
+        predictor.train(data_df)
+        regressor.save_model(REGRESSOR_PKL_PATH)
 
     predicted_price = predictor.predict_single_painting(painting_data_dict)
 
@@ -135,7 +142,9 @@ if __name__ == "__main__":
         # This should be the user painting information from UI (temporarily picking random value)
         random_painting_data = data_for_prediction_df.sample(n=1).iloc[0].to_dict()
 
-        predicted_price = predict_price(data_for_prediction_df, random_painting_data)
+        predicted_price = predict_price(
+            data_for_prediction_df, random_painting_data, force_retrain=False
+        )
 
         print(f'Random Painting Sold Price: {random_painting_data["Sold Price"]}')
         print(f"Predicted Sold Price: {predicted_price:.2f}")

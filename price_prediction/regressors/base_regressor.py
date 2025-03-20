@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Any
 import numpy as np
 
+from helpers.file_manager import FileManager
+
 
 class BaseRegressor(ABC):
     """Abstract base class for all regressors."""
@@ -22,3 +24,20 @@ class BaseRegressor(ABC):
     def predict(self, X_test: np.ndarray) -> np.ndarray:
         """Predict method that must be implemented by all regressors."""
         pass
+
+    def save_model(self, file_path: str) -> None:
+        """Saves the trained model to a .pkl file."""
+        FileManager.save_to_pkl(self.model, file_path)
+
+    def load_model(self, file_path: str) -> bool:
+        """
+        Loads the model from a .pkl file.
+
+        Returns:
+            bool: True if the model was successfully loaded, False otherwise.
+        """
+        loaded_model = FileManager.load_from_pkl(file_path)
+        if loaded_model is not None:
+            self.model = loaded_model
+            return True
+        return False
