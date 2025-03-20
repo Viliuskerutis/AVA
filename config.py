@@ -27,4 +27,5 @@ ARTIST_SYNTHETIC_CSV_PATH = f"{ADDITIONAL_DATA_PATH}/artists_gpto4mini.csv"
 AUCTION_HOUSE_SYNTHETIC_CSV_PATH = (
     f"{ADDITIONAL_DATA_PATH}/auction_houses_gpt4omini.csv"
 )
-REGRESSOR_PKL_PATH = f"{DATA_PATH}/lightgbm.pkl"
+
+REGRESSOR_LIGHTGBM_PKL_PATH = f"{DATA_PATH}/lightgbm.pkl"

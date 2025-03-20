@@ -19,12 +19,11 @@ from price_prediction.embedding_model_type import EmbeddingModelType
 from price_prediction.regressors.base_regressor import BaseRegressor
 
 
+# TODO: Add proper handling if columns are missing as some regressors fail
 class PaintingPricePredictor:
     """
     Handles painting price prediction with preprocessing, feature extraction, and regressor selection.
     """
-
-    # TODO: Handle count columns + synthetic columns + cleanup to reduce need for hardcoded values
 
     NUMERIC_COLUMNS = [
         "Width",
@@ -254,12 +253,8 @@ class PaintingPricePredictor:
 
         # TODO: Move hardcoded values
         if self.use_count:
-            # Additional filtering to keep relevant features only (set to None to disable filter)
-            df = process_keep_relevant(
-                df, min_price=None, max_price=None, min_artwork_count=None
-            )
-        else:
-            df = process_keep_relevant(df, min_price=None, max_price=None)
+            # Additional filtering to keep relevant artists only (with no less than `min_artwork_count`)
+            df = process_keep_relevant(df, min_artwork_count=None, verbose=False)
 
         df = self.fill_missing_values(df)
         return df

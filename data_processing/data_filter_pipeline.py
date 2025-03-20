@@ -13,10 +13,9 @@ from data_processing.filter_strategies import (
 class DataFilterPipeline:
     """A flexible pipeline for applying different filtering strategies."""
 
-    def __init__(
-        self,
-    ):
+    def __init__(self, verbose: bool = True):
         self.steps = []
+        self.verbose = verbose
 
     def add_step(self, step):
         self.steps.append(step)
@@ -26,13 +25,15 @@ class DataFilterPipeline:
             step_name = step.__class__.__name__  # Get the class name of the step
             initial_length = len(df)
 
-            print(f"Applying {step_name}... (Initial Rows: {initial_length})")
+            if self.verbose:
+                print(f"Applying {step_name}... (Initial Rows: {initial_length})")
             df = step.apply(df)
             final_length = len(df)
 
-            print(
-                f"Completed {step_name}. (Remaining Rows: {final_length}, Removed: {initial_length - final_length})"
-            )
+            if self.verbose:
+                print(
+                    f"Completed {step_name}. (Remaining Rows: {final_length}, Removed: {initial_length - final_length})"
+                )
 
         return df
 
@@ -75,8 +76,9 @@ def process_keep_relevant(
     min_price: float = None,
     max_price: float = None,
     min_artwork_count: int = None,
+    verbose: bool = True,
 ):
-    pipeline = DataFilterPipeline()
+    pipeline = DataFilterPipeline(verbose)
 
     pipeline.add_step(PriceRangeFilter(min_price, max_price))
 
