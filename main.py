@@ -131,7 +131,11 @@ if __name__ == "__main__":
 
         # regressor = KNNRegressor(n_neighbors=5)
         # regressor = RandomForestCustomRegressor(n_estimators=10)
-        regressor = LightGBMRegressor(n_estimators=1000)
+        regressor = LightGBMRegressor(n_estimators=500)
+
+        # regressor = NeuralNetworkRegressor(
+        #     input_size=128, hidden_units=128, learning_rate=0.001, epochs=100, batch_size=32
+        # )
         predictor = PaintingPricePredictor(
             regressor=regressor,
             use_separate_numeric_features=True,
