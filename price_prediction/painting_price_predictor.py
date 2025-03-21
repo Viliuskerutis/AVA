@@ -19,17 +19,21 @@ from price_prediction.embedding_model_type import EmbeddingModelType
 from price_prediction.regressors.base_regressor import BaseRegressor
 
 
-# TODO: Add proper handling if columns are missing as some regressors fail
 class PaintingPricePredictor:
     """
     Handles painting price prediction with preprocessing, feature extraction, and regressor selection.
     """
 
     NUMERIC_COLUMNS = [
+        # "Artist Birth Year",
+        # "Artist Death Year",
+        # "Creation Year",
         "Width",
         "Height",
         "Years from auction till now",
         "Years from creation till auction",
+        # "Years from creation till auction",
+        # "Years from birth till creation",
         "Artist Lifetime",
         "Average Sold Price",
         "Min Sold Price",
@@ -38,10 +42,13 @@ class PaintingPricePredictor:
 
     TEXT_COLUMNS = [
         "Artist name",
+        # "Painting name",
+        # "Auction name",
         "Auction House",
         "Auction Country",
         "Materials",
         "Surface",
+        # "Is dead",
         "Signed",
     ]
 
@@ -54,11 +61,13 @@ class PaintingPricePredictor:
         use_images: int,
         use_count: bool,
         use_synthetic: bool,
+        use_artsy: bool,
         embedding_model_type: EmbeddingModelType,
         artist_info_path: str,
         image_features_path: str,
         artist_count_path: str,
         synthetic_paths: List[str],
+        artsy_path: str,
     ):
         self.regressor = regressor
         self.use_separate_numeric_features = use_separate_numeric_features
@@ -67,12 +76,14 @@ class PaintingPricePredictor:
         self.use_images = use_images
         self.use_count = use_count
         self.use_synthetic = use_synthetic
+        self.use_artsy = use_artsy
         self.model = SentenceTransformer(embedding_model_type.value)
 
         self.artist_info_path = artist_info_path
         self.image_features_path = image_features_path
         self.artist_count_path = artist_count_path
         self.synthetic_paths = synthetic_paths
+        self.artsy_path = artsy_path
 
         self.additional_text_columns = []
         self.additional_numeric_columns = []
@@ -92,42 +103,6 @@ class PaintingPricePredictor:
         for col in columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
         return df
-
-    def remove_price_outliers(
-        self, df: pd.DataFrame, column="Sold Price", method="iqr", factor=1.5
-    ) -> pd.DataFrame:
-        """
-        Removes outliers from 'Sold Price' column using either IQR or Z-score method.
-        """
-        if method == "iqr":
-            Q1, Q3 = df[column].quantile([0.25, 0.75])
-            IQR = Q3 - Q1
-            return df[
-                (df[column] >= Q1 - factor * IQR) & (df[column] <= Q3 + factor * IQR)
-            ]
-        elif method == "zscore":
-            z_scores = (df[column] - df[column].mean()) / df[column].std()
-            return df[abs(z_scores) <= factor]
-        else:
-            raise ValueError("Unsupported outlier detection method")
-
-    def add_artist_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Merges external artist data into the main dataframe (using artist name as the key).
-        """
-        artist_data = pd.read_csv(self.artist_info_path, sep=";", encoding="utf-8")
-        artist_data["Name"] = artist_data["Name"].str.lower()
-        df["Artist name"] = df["Artist name"].str.lower()
-
-        artist_data = self.convert_columns_to_numeric(
-            artist_data, self.ARTFACTS_NUMERIC_COLUMNS
-        )
-        df = self.convert_columns_to_numeric(df, self.NUMERIC_COLUMNS)
-
-        df = df.merge(
-            artist_data, left_on="Artist name", right_on="Name", how="left"
-        ).drop(columns=["Name"])
-        return self.fill_missing_values(df)
 
     def add_image_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -250,6 +225,13 @@ class PaintingPricePredictor:
             )
             self.additional_text_columns += synth_text2
             self.additional_numeric_columns += synth_numeric2
+
+        if self.use_artsy:
+            df, artsy_text, artsy_numeric = PropertyModifier.add_additional_data(
+                df, "Artist name", self.artsy_path, "Name", []
+            )
+            self.additional_text_columns += artsy_text
+            self.additional_numeric_columns += artsy_numeric
 
         # TODO: Move hardcoded values
         if self.use_count:

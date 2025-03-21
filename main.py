@@ -5,6 +5,7 @@ from config import (
     ARTIST_COUNT_CSV_PATH,
     ARTIST_INFORMATION_CSV_PATH,
     ARTIST_SYNTHETIC_CSV_PATH,
+    ARTSY_CSV_PATH,
     AUCTION_HOUSE_SYNTHETIC_CSV_PATH,
     IMAGE_FEATURES_PKL_PATH,
     IMAGES_PATH,
@@ -144,6 +145,7 @@ if __name__ == "__main__":
             use_images=0,
             use_count=True,
             use_synthetic=False,
+            use_artsy=False,
             embedding_model_type=EmbeddingModelType.ALL_MINILM,
             artist_info_path=ARTIST_INFORMATION_CSV_PATH,
             image_features_path=IMAGE_FEATURES_PKL_PATH,
@@ -152,6 +154,7 @@ if __name__ == "__main__":
                 ARTIST_SYNTHETIC_CSV_PATH,
                 AUCTION_HOUSE_SYNTHETIC_CSV_PATH,
             ],
+            artsy_path=ARTSY_CSV_PATH,
         )
 
         # This should be the user painting information from UI (temporarily picking random value)
