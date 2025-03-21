@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -265,18 +265,69 @@ class PaintingPricePredictor:
         """
         self.regressor.clear_fit()
         df = self.preprocess_data(df)
+        X = self.generate_combined_embeddings(df)
+        y = df["Sold Price"].astype(float)
 
-        X, y = self.generate_combined_embeddings(df), df["Sold Price"].astype(float)
+        # Store the feature columns and types
+        self.regressor.feature_columns = df.columns.tolist()
+        self.regressor.feature_types = df.dtypes.to_dict()
+
         self.regressor.train(X, y)
 
-    def predict_single_painting(self, row: Dict[str, Any]) -> Optional[float]:
+    def predict_single_painting(
+        self, row: Union[Dict[str, Any], pd.Series]
+    ) -> Optional[float]:
         """
         Preprocesses a single painting's data and predicts its price.
+        Accepts either a dictionary or a pandas Series.
         """
-        df_single = pd.DataFrame([row])
-        df_single = self.preprocess_data(df_single)
-        X = self.generate_combined_embeddings(df_single)
+        # Convert input into a single-row DataFrame.
+        if isinstance(row, dict):
+            df_single = pd.DataFrame([row])
+        elif isinstance(row, pd.Series):
+            df_single = row.to_frame().T
+        else:
+            raise ValueError("Input row must be a dictionary or a pandas Series")
+
+        processed_df = self.preprocess_data(df_single)
+        processed_df = self.filter_prediction_columns(processed_df)
+        X = self.generate_combined_embeddings(processed_df)
+
         return self.regressor.predict(X)[0]
+
+    def filter_prediction_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Ensures that the DataFrame df contains only the feature columns that were used during training.
+        If a column is missing, it is added with a default value based on its type.
+        Then, casts each column to its expected dtype.
+        Uses schema stored on self.regressor.
+        """
+        # Verify that the regressor holds the necessary schema.
+        if not hasattr(self.regressor, "feature_columns") or not hasattr(
+            self.regressor, "feature_types"
+        ):
+            raise ValueError(
+                "Feature columns or types are not stored in the regressor. "
+                "Ensure the model is trained or loaded correctly."
+            )
+
+        # Add missing columns with default values.
+        for col in self.regressor.feature_columns:
+            if col not in df.columns:
+                expected_dtype = self.regressor.feature_types[col]
+                if pd.api.types.is_numeric_dtype(expected_dtype):
+                    df[col] = 0
+                else:
+                    df[col] = "Unknown"
+
+        # Keep only the expected columns and reorder them.
+        df = df[self.regressor.feature_columns]
+
+        # Cast each column to its expected type.
+        for col in self.regressor.feature_columns:
+            df[col] = df[col].astype(self.regressor.feature_types[col])
+
+        return df
 
     # TODO: Move to experimentation
     def predict_with_test_split(self, df: pd.DataFrame) -> pd.DataFrame:

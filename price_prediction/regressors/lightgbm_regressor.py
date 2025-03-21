@@ -1,5 +1,6 @@
 import numpy as np
 from lightgbm import LGBMRegressor
+import pandas as pd
 
 from price_prediction.regressors.base_regressor import BaseRegressor
 
@@ -19,4 +20,7 @@ class LightGBMRegressor(BaseRegressor):
         self.model.fit(X_train, y_train, eval_metric="mae")
 
     def predict(self, X_test: np.ndarray) -> np.ndarray:
+        X_test = pd.DataFrame(
+            X_test, columns=self.model.feature_name_
+        )  # LightGBM requires names
         return self.model.predict(X_test)

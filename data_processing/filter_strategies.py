@@ -1,3 +1,4 @@
+import math
 import os
 from typing import Optional
 import numpy as np
@@ -32,11 +33,11 @@ class InitialCleanupFilter(BaseFilter):
                 if parts:
                     df.at[idx, "Surface"] = parts[0]
                     df.at[idx, "Materials"] = (
-                        ", ".join(parts[1:]) if len(parts) > 1 else "nan"
+                        ", ".join(parts[1:]) if len(parts) > 1 else ""
                     )
                 else:
-                    df.at[idx, "Surface"] = "nan"
-                    df.at[idx, "Materials"] = "nan"
+                    df.at[idx, "Surface"] = ""
+                    df.at[idx, "Materials"] = ""
             else:
                 parts = (
                     desc.split("/")
@@ -46,57 +47,47 @@ class InitialCleanupFilter(BaseFilter):
                 if parts:
                     df.at[idx, "Materials"] = parts[0]
                     df.at[idx, "Surface"] = (
-                        "/".join(parts[1:]) if len(parts) > 1 else "nan"
+                        "/".join(parts[1:]) if len(parts) > 1 else ""
                     )
                 else:
-                    df.at[idx, "Materials"] = "nan"
-                    df.at[idx, "Surface"] = "nan"
+                    df.at[idx, "Materials"] = ""
+                    df.at[idx, "Surface"] = ""
         return df
 
-    # --- Price columns ---
     def _clean_price_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Helper functions for price cleaning
-        def delete_euro_sign(value):
-            value = str(value)
-            if "€" in value:
-                parts = value.split("€")
-                return parts[1].strip() if len(parts) > 1 else value
-            return value
+        # Helper function for price cleaning with floor conversion.
+        def clean_price(value):
+            val = str(value).strip()
+            # Remove euro sign if present.
+            if "€" in val:
+                parts = val.split("€")
+                val = parts[1].strip() if len(parts) > 1 else val
+            # Remove comma used as thousands separator.
+            val = val.replace(",", "")
+            # If the value contains non-numeric indicators, treat as empty.
+            if "not sold" in val.lower() or ("(" in val or ")" in val):
+                return ""
+            # Try to convert to float then floor it to an integer.
+            try:
+                num = float(val)
+                return math.floor(num)
+            except ValueError:
+                return ""
 
-        def replace_nan_to_zero(value):
-            return 0 if str(value).lower() == "nan" else value
-
-        def replace_not_sold_to_zero(value):
-            return 0 if str(value).strip().lower() == "not sold" else value
-
-        def replace_comma(value):
-            return str(value).replace(",", "")
-
-        # Process each price column
+        # Process each price column.
         for col in [
             "Estimated Minimum Price",
             "Estimated Maximum Price",
             "Sold Price",
             "Primary Price",
         ]:
-            df[col] = df[col].apply(delete_euro_sign)
-            if col == "Sold Price":
-                df[col] = df[col].apply(replace_not_sold_to_zero)
-            else:
-                df[col] = df[col].apply(replace_nan_to_zero)
-            df[col] = df[col].apply(replace_comma)
+            df[col] = df[col].apply(clean_price)
 
-        # If Estimated Minimum Price is 0, replace it with the cleaned Primary Price value
+        # If Estimated Minimum Price is 0, replace it with the cleaned Primary Price value.
         mask = df["Estimated Minimum Price"] == 0
         df.loc[mask, "Estimated Minimum Price"] = df.loc[mask, "Primary Price"]
+        df = df.drop(columns=["Primary Price"], errors="ignore")
 
-        # Filter out rows where prices are not numeric
-        df = df[df["Sold Price"].apply(lambda x: str(x).replace(".", "", 1).isdigit())]
-        df = df[
-            df["Estimated Minimum Price"].apply(
-                lambda x: str(x).replace(".", "", 1).isdigit()
-            )
-        ]
         return df
 
     # --- Year columns ---
@@ -130,7 +121,18 @@ class InitialCleanupFilter(BaseFilter):
             return value.replace(decade, year) if decade in value else value
 
         def replace_question_mark(value):
-            return str(value).replace("?", "nan")
+            return str(value).replace("?", "")
+
+        def fill_missing(value):
+            if pd.isnull(value) or str(value).strip() == "":
+                return ""
+            return value
+
+        def replace_non_numeric(value):
+            if str(value).strip().isnumeric():
+                return value
+            else:
+                return ""
 
         # Process 'Artist Birth Year' and 'Artist Death Year'
         for col in ["Creation Year", "Artist Birth Year", "Artist Death Year"]:
@@ -140,15 +142,17 @@ class InitialCleanupFilter(BaseFilter):
             df[col] = df[col].apply(lambda x: replace_decade(x, "XX", "1900"))
             df[col] = df[col].apply(lambda x: replace_decade(x, "XIX", "1820"))
             df[col] = df[col].apply(replace_question_mark)
+            df[col] = df[col].apply(fill_missing)
+            df[col] = df[col].apply(replace_non_numeric)
 
         # Process 'Auction Date'
         def extract_auction_year(value):
             try:
                 parts = str(value).split(" ")
                 year = parts[-1]
-                return year if year.isnumeric() else "0"
+                return year if year.isnumeric() else ""
             except Exception:
-                return "0"
+                return ""
 
         df["Auction Date"] = df["Auction Date"].apply(extract_auction_year)
 
@@ -158,6 +162,8 @@ class InitialCleanupFilter(BaseFilter):
             return value.split("to")[1].strip() if "to" in value else value
 
         df["Auction Date"] = df["Auction Date"].apply(leave_years)
+        df["Auction Date"] = df["Auction Date"].apply(fill_missing)
+        df["Auction Date"] = df["Auction Date"].apply(replace_non_numeric)
         return df
 
     # --- Derived columns based on years and artist info ---
@@ -166,7 +172,7 @@ class InitialCleanupFilter(BaseFilter):
 
         # Derive "Years from auction till now"
         df["Years from auction till now"] = df["Auction Date"].apply(
-            lambda x: current_year - int(x) if str(x).isdigit() else "nan"
+            lambda x: current_year - int(x) if str(x).isdigit() else ""
         )
         # Derive "Years from creation till auction"
         df["Years from creation till auction"] = df.apply(
@@ -174,7 +180,7 @@ class InitialCleanupFilter(BaseFilter):
                 int(row["Auction Date"]) - int(row["Creation Year"])
                 if str(row["Auction Date"]).isdigit()
                 and str(row["Creation Year"]).isdigit()
-                else "nan"
+                else ""
             ),
             axis=1,
         )
@@ -184,18 +190,18 @@ class InitialCleanupFilter(BaseFilter):
                 int(row["Creation Year"]) - int(row["Artist Birth Year"])
                 if str(row["Creation Year"]).isdigit()
                 and str(row["Artist Birth Year"]).isdigit()
-                else "nan"
+                else ""
             ),
             axis=1,
         )
 
         # Determine if the artist is dead
         def is_dead(birth, death):
-            if str(death).lower() == "nan":
+            if str(death).lower() == "":
                 if str(birth).isdigit():
                     age = current_year - int(birth)
                     return age > 100
-                return "nan"
+                return ""
             return True
 
         df["Is dead"] = df.apply(
@@ -205,13 +211,13 @@ class InitialCleanupFilter(BaseFilter):
 
         # Calculate artist lifetime (or capped lifetime if still alive)
         def artist_lifetime(birth, death):
-            if str(death).lower() == "nan":
+            if str(death).lower() == "":
                 if str(birth).isdigit():
                     age = current_year - int(birth)
-                    return 100 if age > 100 else 0
-                return 0
+                    return "" if age > 100 else ""
+                return ""
             else:
-                return int(death) - int(birth) if str(birth).isdigit() else 0
+                return int(death) - int(birth) if str(birth).isdigit() else ""
 
         df["Artist Lifetime"] = df.apply(
             lambda row: artist_lifetime(
@@ -219,13 +225,12 @@ class InitialCleanupFilter(BaseFilter):
             ),
             axis=1,
         )
-        # Artist years now (if still alive)
+        # Artist years now
         df["Artist Years Now"] = df.apply(
             lambda row: (
                 current_year - int(row["Artist Birth Year"])
                 if str(row["Artist Birth Year"]).isdigit()
-                and str(row["Artist Death Year"]).lower() == "nan"
-                else 0
+                else ""
             ),
             axis=1,
         )
@@ -233,7 +238,18 @@ class InitialCleanupFilter(BaseFilter):
         return df
 
     def _check_if_singed(self, df: pd.DataFrame) -> pd.DataFrame:
-        words_to_find = ["sign.", "signed", "Signed", "Sign."]
+        words_to_find = [
+            "sign.",
+            "signed",
+            "Signed",
+            "Sign.",
+            "AK",
+            "AD",
+            "VK",
+            "VD",
+            "KP",
+            "DP",
+        ]
         df["Signed"] = ""
         df["Signed"] = df["Details"].apply(
             lambda x: any(word in x for word in words_to_find) if pd.notna(x) else False
@@ -251,8 +267,8 @@ class InitialCleanupFilter(BaseFilter):
         df["Area"] = df.apply(
             lambda row: (
                 round(float(row["Width"]) * float(row["Height"]), 2)
-                if row["Width"] != "nan" and row["Height"] != "nan"
-                else 0
+                if row["Width"] != "" and row["Height"] != ""
+                else ""
             ),
             axis=1,
         )
@@ -296,10 +312,93 @@ class InitialCleanupFilter(BaseFilter):
         df["Auction Country"] = df["Auction City Information"].apply(
             _leave_just_country
         )
+        df = df.drop(columns=["Auction City Information"], errors="ignore")
 
         return df
 
+    # --- Convert column types ---
+    def _convert_column_types(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Convert DataFrame columns from string to their appropriate types.
+        Missing values represented as the string 'nan' are first replaced with np.nan.
+        Then, columns with values that are mostly numeric are converted to numeric types,
+        those that represent booleans are converted to booleans, and the rest remain as text.
+        """
+        # Replace "nan" strings with actual NaN values for proper conversion.
+        df = df.replace("", np.nan)
+        df = df.replace("nan", np.nan)
+
+        for col in df.columns:
+            # Only consider object-type columns.
+            if df[col].dtype != "object":
+                continue
+
+            # Check for boolean columns: if all non-null values are 'true'/'false' (case insensitive)
+            unique_vals = df[col].dropna().unique()
+            lower_vals = {str(val).strip().lower() for val in unique_vals}
+            if lower_vals.issubset({"true", "false"}) and lower_vals:
+                df[col] = (
+                    df[col]
+                    .astype(str)
+                    .str.strip()
+                    .str.lower()
+                    .map({"true": True, "false": False})
+                )
+                continue
+
+            # Try numeric conversion.
+            converted = pd.to_numeric(df[col], errors="coerce")
+            # Calculate the fraction of non-missing values that were successfully converted.
+            original_non_na = df[col].notna().sum()
+            non_na_converted = converted.notna().sum()
+            if original_non_na > 0 and (non_na_converted / original_non_na) >= 0.8:
+                # If all converted values are whole numbers, convert to integer (using pandas nullable integer type).
+                if (converted.dropna() % 1 == 0).all():
+                    df[col] = converted.astype("Int64")
+                else:
+                    df[col] = converted.astype(float)
+            else:
+                # Otherwise, ensure the column is kept as string.
+                df[col] = df[col].astype(str)
+
+        return df
+
+    def _fix_auction_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Detects misaligned auction columns where "Auction City Information" is a duplicate of "Details".
+        For such rows, this method:
+        - Moves the value from "Auction House" to "Auction City Information" and clears "Auction House".
+        - Moves the value from "Auction name" to "Auction Date" and clears "Auction name".
+        """
+        mask = df["Auction City Information"] == df["Details"]
+        df.loc[mask, "Auction City Information"] = df.loc[mask, "Auction House"]
+        df.loc[mask, "Auction House"] = ""
+        df.loc[mask, "Auction Date"] = df.loc[mask, "Auction name"]
+        df.loc[mask, "Auction name"] = ""
+        return df
+
+    def _fill_missing_defaults(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Fill missing values with defaults:
+        - Numeric columns: -1
+        - Boolean columns: False
+        - Other (object/string) columns: "Unknown"
+        """
+        for col in df.columns:
+            if pd.api.types.is_numeric_dtype(df[col]):
+                df[col] = df[col].fillna(-1)
+            elif pd.api.types.is_bool_dtype(df[col]):
+                df[col] = df[col].fillna(False)
+            else:
+                df[col] = df[col].fillna("Unknown")
+        return df
+
     def apply(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df[df["Artist name"].notnull() & (df["Artist name"].str.strip() != "")]
+
+        # Some rows are bugged from scrapped, this fixes it.
+        df = self._fix_auction_columns(df)
+
         # 1. Process description and technique-related columns.
         df = self._clean_description_columns(df)
 
@@ -334,6 +433,13 @@ class InitialCleanupFilter(BaseFilter):
         ]
         df = df.drop(columns=columns_to_drop, errors="ignore")
 
+        # 9. Convert column types to appropriate data types.
+        df = self._convert_column_types(df)
+
+        # 10. Fill missing values with defaults.
+        df = self._fill_missing_defaults(df)
+
+        df.reset_index(drop=True, inplace=True)
         return df
 
 
