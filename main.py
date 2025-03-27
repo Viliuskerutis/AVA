@@ -141,6 +141,7 @@ if __name__ == "__main__":
             regressor=regressor,
             use_separate_numeric_features=True,
             encode_per_column=True,
+            hot_encode_surface_material=True,
             use_artfacts=False,
             use_images=0,
             use_count=True,

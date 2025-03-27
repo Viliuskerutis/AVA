@@ -57,6 +57,7 @@ class PaintingPricePredictor:
         regressor: BaseRegressor,
         use_separate_numeric_features: bool,
         encode_per_column: bool,
+        hot_encode_surface_material: bool,
         use_artfacts: bool,
         use_images: int,
         use_count: bool,
@@ -72,6 +73,7 @@ class PaintingPricePredictor:
         self.regressor = regressor
         self.use_separate_numeric_features = use_separate_numeric_features
         self.encode_per_column = encode_per_column
+        self.hot_encode_surface_material = hot_encode_surface_material
         self.use_artfacts = use_artfacts
         self.use_images = use_images
         self.use_count = use_count
@@ -177,6 +179,17 @@ class PaintingPricePredictor:
         # Reset the additional columns lists
         self.additional_text_columns = []
         self.additional_numeric_columns = []
+
+        # Hot-encode surfaces and materials
+        if self.hot_encode_surface_material:
+            surfaces = df["Surface"].str.get_dummies()
+            materials = df["Materials"].str.get_dummies()
+            df = pd.concat([df, surfaces], axis=1)
+            df = pd.concat([df, materials], axis=1)
+            self.additional_numeric_columns += surfaces.columns.tolist()
+            self.additional_numeric_columns += materials.columns.tolist()
+            self.TEXT_COLUMNS.remove("Surface")
+            self.TEXT_COLUMNS.remove("Materials")
 
         # Add additional data dynamically
         if self.use_artfacts:
