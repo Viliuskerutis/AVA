@@ -18,8 +18,8 @@ from config import (
 
 from data_processing.data_filter_pipeline import (
     process_for_image_similarity,
-    process_for_predictions,
     process_keep_relevant,
+    process_after_scraping,
 )
 from image_similarity.model_loader import ModelLoader
 from image_similarity.feature_extractor import FeatureExtractor
@@ -30,6 +30,7 @@ from price_prediction.painting_price_predictor import PaintingPricePredictor
 from price_prediction.regressors.knn_regressor import KNNRegressor
 from price_prediction.regressors.lightgbm_regressor import LightGBMRegressor
 import pandas as pd
+from price_prediction.regressors.neural_network_regressor import NeuralNetworkRegressor
 from price_prediction.regressors.random_forest_regressor import (
     RandomForestCustomRegressor,
 )
@@ -121,7 +122,7 @@ if __name__ == "__main__":
     if most_similar is None or force_prediction:
         # In current implementation it is expected that image from `input_image_path` exists in data folder
         # User input data should be passed trough processing pipeline before use
-        data_for_prediction_df = process_for_predictions(data_df)
+        data_for_prediction_df = process_after_scraping(data_df)
         # Additional filtering to keep relevant artists only (set possible price range for predictions for higher accuracy)
         data_for_prediction_df = process_keep_relevant(
             data_for_prediction_df, min_price=None, max_price=None
@@ -133,7 +134,6 @@ if __name__ == "__main__":
         # regressor = KNNRegressor(n_neighbors=5)
         # regressor = RandomForestCustomRegressor(n_estimators=10)
         regressor = LightGBMRegressor(n_estimators=500)
-
         # regressor = NeuralNetworkRegressor(
         #     input_size=128, hidden_units=128, learning_rate=0.001, epochs=100, batch_size=32
         # )

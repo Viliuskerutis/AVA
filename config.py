@@ -20,7 +20,9 @@ CSVS_PATH = f"{DATA_PATH}/csvs"
 IMAGE_FEATURES_PKL_PATH = f"{DATA_PATH}/image-features.pkl"
 
 ADDITIONAL_DATA_PATH = f"{DATA_PATH}/additional_data"
-ARTIST_INFORMATION_CSV_PATH = f"{ADDITIONAL_DATA_PATH}/artist_data.csv"
+ARTIST_INFORMATION_CSV_PATH = (
+    f"{ADDITIONAL_DATA_PATH}/results_artfacts_artists_final.csv"
+)
 COMBINED_INFORMATION_CSV_PATH = f"{ADDITIONAL_DATA_PATH}/combined_filtered_data.csv"
 ARTIST_COUNT_CSV_PATH = f"{ADDITIONAL_DATA_PATH}/artist_counts.csv"
 ARTIST_SYNTHETIC_CSV_PATH = f"{ADDITIONAL_DATA_PATH}/artists_gpto4mini.csv"

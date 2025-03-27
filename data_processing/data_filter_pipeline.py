@@ -8,6 +8,7 @@ from data_processing.filter_strategies import (
     OutlierPriceFilter,
     PriceRangeFilter,
 )
+from data_processing.initial_filter_after_scraping import InitialAfterScrapingFilter
 
 
 class DataFilterPipeline:
@@ -54,15 +55,37 @@ def process_for_image_similarity(df, image_path_dictionary):
     return pipeline.apply(df)
 
 
-def process_for_predictions(df):
+def process_after_scraping(df):
     pipeline = DataFilterPipeline()
 
     pipeline.add_step(InvalidSoldPriceFilter())
 
-    pipeline.add_step(InitialCleanupFilter())
+    pipeline.add_step(OutlierPriceFilter("iqr", 1.5))
+    pipeline.add_step(OutlierPriceFilter("iqr", 1.5))
+
+    pipeline.add_step(InitialAfterScrapingFilter())
+
+    return pipeline.apply(df)
+
+
+def process_for_predictions(df):
+    raise NotImplementedError
+    pipeline = DataFilterPipeline()
+
+    pipeline.add_step(InvalidSoldPriceFilter())
 
     pipeline.add_step(OutlierPriceFilter("iqr", 1.5))
     pipeline.add_step(OutlierPriceFilter("iqr", 1.5))
+
+    pipeline.add_step(InitialCleanupFilter())
+
+    return pipeline.apply(df)
+
+
+def process_categorical(df):
+    pipeline = DataFilterPipeline()
+
+    pipeline.add_step()
 
     return pipeline.apply(df)
 
