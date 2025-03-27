@@ -1,10 +1,12 @@
 from data_processing.filter_strategies import (
     ArtorkCountFilter,
+    EnsureDataFilledAndCorrectFilter,
     DuplicateFilter,
     InitialCleanupFilter,
     InvalidSoldPriceFilter,
     LowQualityImageFilter,
     MissingImageFilter,
+    MissingValueFilter,
     OutlierPriceFilter,
     PriceRangeFilter,
 )
@@ -65,6 +67,8 @@ def process_after_scraping(df):
 
     pipeline.add_step(InitialAfterScrapingFilter())
 
+    pipeline.add_step(EnsureDataFilledAndCorrectFilter())
+
     return pipeline.apply(df)
 
 
@@ -95,12 +99,18 @@ def process_keep_relevant(
     min_price: float = None,
     max_price: float = None,
     min_artwork_count: int = None,
+    max_missing_percent: float = None,
     verbose: bool = True,
 ):
     pipeline = DataFilterPipeline(verbose)
 
-    pipeline.add_step(PriceRangeFilter(min_price, max_price))
+    if min_price is not None or max_price is not None:
+        pipeline.add_step(PriceRangeFilter(min_price, max_price))
 
-    pipeline.add_step(ArtorkCountFilter(min_artwork_count))
+    if min_artwork_count is not None:
+        pipeline.add_step(ArtorkCountFilter(min_artwork_count))
+
+    if max_missing_percent is not None:
+        pipeline.add_step(MissingValueFilter(max_missing_percent))
 
     return pipeline.apply(df)

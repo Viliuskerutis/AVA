@@ -55,6 +55,7 @@ class PaintingPricePredictor:
     def __init__(
         self,
         regressor: BaseRegressor,
+        max_missing_percent: float,
         use_separate_numeric_features: bool,
         encode_per_column: bool,
         hot_encode_surface_material: bool,
@@ -71,6 +72,7 @@ class PaintingPricePredictor:
         artsy_path: str,
     ):
         self.regressor = regressor
+        self.max_missing_percent = max_missing_percent
         self.use_separate_numeric_features = use_separate_numeric_features
         self.encode_per_column = encode_per_column
         self.hot_encode_surface_material = hot_encode_surface_material
@@ -121,8 +123,9 @@ class PaintingPricePredictor:
         features_df = pd.DataFrame.from_dict(averaged_features, orient="index")
         features_df.index.name = "Photo id"
 
-        pca = PCA(n_components=self.use_images)
-        reduced_features = pca.fit_transform(features_df)
+        if not hasattr(self, "pca"):
+            self.pca = PCA(n_components=self.use_images)
+        reduced_features = self.pca.fit_transform(features_df)
         reduced_features_df = pd.DataFrame(
             reduced_features,
             index=features_df.index,
@@ -162,7 +165,9 @@ class PaintingPricePredictor:
             embeddings = self.model.encode(descriptions.tolist()).astype("float32")
 
         if self.use_separate_numeric_features:
-            numeric_data = StandardScaler().fit_transform(df[numeric_columns])
+            if not hasattr(self, "scaler"):
+                self.scaler = StandardScaler()
+                numeric_data = self.scaler.fit_transform(df[numeric_columns])
             return np.hstack((embeddings, numeric_data))
 
         return embeddings
@@ -182,14 +187,17 @@ class PaintingPricePredictor:
 
         # Hot-encode surfaces and materials
         if self.hot_encode_surface_material:
-            surfaces = df["Surface"].str.get_dummies()
-            materials = df["Materials"].str.get_dummies()
-            df = pd.concat([df, surfaces], axis=1)
-            df = pd.concat([df, materials], axis=1)
-            self.additional_numeric_columns += surfaces.columns.tolist()
-            self.additional_numeric_columns += materials.columns.tolist()
-            self.TEXT_COLUMNS.remove("Surface")
-            self.TEXT_COLUMNS.remove("Materials")
+            if "Surface" in df.columns:
+                surfaces = df["Surface"].str.get_dummies()
+                df = pd.concat([df, surfaces], axis=1)
+                self.additional_numeric_columns += surfaces.columns.tolist()
+                self.TEXT_COLUMNS.remove("Surface")
+
+            if "Materials" in df.columns:
+                materials = df["Materials"].str.get_dummies()
+                df = pd.concat([df, materials], axis=1)
+                self.additional_numeric_columns += materials.columns.tolist()
+                self.TEXT_COLUMNS.remove("Materials")
 
         # Add additional data dynamically
         if self.use_artfacts:
@@ -251,7 +259,7 @@ class PaintingPricePredictor:
             # Additional filtering to keep relevant artists only (with no less than `min_artwork_count`)
             df = process_keep_relevant(df, min_artwork_count=None, verbose=False)
 
-        df = self.fill_missing_values(df)
+        df = process_keep_relevant(df, max_missing_percent=self.max_missing_percent)
         return df
 
     def train(self, df: pd.DataFrame) -> None:
@@ -305,6 +313,11 @@ class PaintingPricePredictor:
                 "Feature columns or types are not stored in the regressor. "
                 "Ensure the model is trained or loaded correctly."
             )
+
+        # Add logging if different training/prediction weights used
+        unexpected_columns = set(df.columns) - set(self.regressor.feature_columns)
+        if unexpected_columns:
+            print(f"Warning: Unexpected columns in input data: {unexpected_columns}")
 
         # Add missing columns with default values.
         for col in self.regressor.feature_columns:

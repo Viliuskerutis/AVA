@@ -1,6 +1,5 @@
 import pandas as pd
 from datetime import datetime
-import sys
 from data_processing.base_filter import BaseFilter
 
 
@@ -867,6 +866,7 @@ class InitialAfterScrapingFilter(BaseFilter):
         # df = df.drop(columns=['Artist Death Year'])
         # df = df.drop(columns=['Artist Birth Year'])
         # df = df.drop(columns=['Creation Year'])
+        df = df.drop(columns=["Primary Price"])
         df = df.drop(columns=["Auction Date"])
         df = df.drop(columns=["Auction City Information"])
 

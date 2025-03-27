@@ -27,6 +27,9 @@ from image_similarity.similarity_checker import SimilarityChecker
 from helpers.file_manager import FileManager
 from price_prediction.embedding_model_type import EmbeddingModelType
 from price_prediction.painting_price_predictor import PaintingPricePredictor
+from price_prediction.regressors.histogram_gradient_boosting_regressor import (
+    HistogramGradientBoostingRegressor,
+)
 from price_prediction.regressors.knn_regressor import KNNRegressor
 from price_prediction.regressors.lightgbm_regressor import LightGBMRegressor
 import pandas as pd
@@ -125,7 +128,10 @@ if __name__ == "__main__":
         data_for_prediction_df = process_after_scraping(data_df)
         # Additional filtering to keep relevant artists only (set possible price range for predictions for higher accuracy)
         data_for_prediction_df = process_keep_relevant(
-            data_for_prediction_df, min_price=None, max_price=None
+            data_for_prediction_df,
+            min_price=None,
+            max_price=None,
+            max_missing_percent=None,
         )
 
         # Initialization of regressor and predictor can be done once when server is run
@@ -135,10 +141,19 @@ if __name__ == "__main__":
         # regressor = RandomForestCustomRegressor(n_estimators=10)
         regressor = LightGBMRegressor(n_estimators=500)
         # regressor = NeuralNetworkRegressor(
-        #     input_size=128, hidden_units=128, learning_rate=0.001, epochs=100, batch_size=32
+        #     hidden_units=2048,
+        #     learning_rate=0.01,
+        #     epochs=1000,
+        #     batch_size=32,
+        #     patience=6,
+        #     lr_patience=3,
+        #     lr_factor=0.25,
         # )
+        # regressor = HistogramGradientBoostingRegressor()
+
         predictor = PaintingPricePredictor(
             regressor=regressor,
+            max_missing_percent=0.3,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
             use_separate_numeric_features=True,
             encode_per_column=True,
             hot_encode_surface_material=True,

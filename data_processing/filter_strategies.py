@@ -8,6 +8,111 @@ from data_processing.base_filter import BaseFilter
 from datetime import datetime
 
 
+class MissingValueFilter(BaseFilter):
+    """
+    Removes rows with more than a specified percentage of missing values.
+    """
+
+    def __init__(self, max_missing_percent: float):
+        """
+        :param max_missing_percent: Maximum allowed percentage of missing values in a row (0 to 100).
+        """
+        if not (0 <= max_missing_percent <= 1):
+            raise ValueError("max_missing_percent must be between 0.0 and 1.0.")
+        self.max_missing_percent = max_missing_percent
+
+    def apply(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Removes rows with more than the allowed percentage of missing values.
+
+        :param df: Input DataFrame.
+        :return: Filtered DataFrame.
+        """
+        # Replace placeholders (-1 and "Unknown") with NaN for proper missing value detection
+        df_temp = df.replace({-1: np.nan, "Unknown": np.nan})
+
+        # Calculate the percentage of missing values for each row
+        missing_percent = df_temp.isnull().mean(axis=1)
+
+        # Keep rows where the percentage of missing values is less than or equal to the threshold
+        filtered_df = df[missing_percent <= self.max_missing_percent]
+
+        return filtered_df.reset_index(drop=True)
+
+
+class EnsureDataFilledAndCorrectFilter(BaseFilter):
+    def _convert_column_types(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Convert DataFrame columns from string to their appropriate types.
+        Missing values represented as the string 'nan' are first replaced with np.nan.
+        Then, columns with values that are mostly numeric are converted to numeric types,
+        those that represent booleans are converted to booleans, and the rest remain as text.
+        """
+        # Replace "nan" strings with actual NaN values for proper conversion.
+
+        df = df.replace("", np.nan)
+        df = df.replace("nan", np.nan)
+
+        for col in df.columns:
+            # Only consider object-type columns.
+            if df[col].dtype != "object":
+                continue
+
+            # Check for boolean columns: if all non-null values are 'true'/'false' (case insensitive)
+            unique_vals = df[col].dropna().unique()
+            lower_vals = {str(val).strip().lower() for val in unique_vals}
+            if lower_vals.issubset({"true", "false"}) and lower_vals:
+                df[col] = (
+                    df[col]
+                    .astype(str)
+                    .str.strip()
+                    .str.lower()
+                    .map({"true": True, "false": False})
+                )
+                continue
+
+            # Try numeric conversion.
+            converted = pd.to_numeric(df[col], errors="coerce")
+            # Calculate the fraction of non-missing values that were successfully converted.
+            original_non_na = df[col].notna().sum()
+            non_na_converted = converted.notna().sum()
+            if original_non_na > 0 and (non_na_converted / original_non_na) >= 0.8:
+                # If all converted values are whole numbers, convert to integer (using pandas nullable integer type).
+                if (converted.dropna() % 1 == 0).all():
+                    df[col] = converted.astype("Int64")
+                else:
+                    df[col] = converted.astype(float)
+            else:
+                # Otherwise, ensure the column is kept as string.
+                df[col] = df[col].astype(str)
+
+        return df
+
+    def _fill_missing_defaults(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Fill missing values with defaults:
+        - Numeric columns: -1
+        - Boolean columns: False
+        - Other (object/string) columns: "Unknown"
+        """
+        df = df.replace("", np.nan)
+        df = df.replace("nan", np.nan)
+
+        for col in df.columns:
+            if pd.api.types.is_numeric_dtype(df[col]):
+                df[col] = df[col].fillna(-1)
+            elif pd.api.types.is_bool_dtype(df[col]):
+                df[col] = df[col].fillna(False)
+            else:
+                df[col] = df[col].fillna("Unknown")
+        return df
+
+    def apply(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = self._convert_column_types(df)
+        df = self._fill_missing_defaults(df)
+        return df
+
+
 class InitialCleanupFilter(BaseFilter):
     """
     A filter strategy that performs initial cleanup of the DataFrame.
