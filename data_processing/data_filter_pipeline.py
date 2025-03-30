@@ -2,6 +2,7 @@ from data_processing.filter_strategies import (
     ArtorkCountFilter,
     EnsureDataFilledAndCorrectFilter,
     DuplicateFilter,
+    FilterByColumn,
     InitialCleanupFilter,
     InvalidSoldPriceFilter,
     LowQualityImageFilter,
@@ -100,6 +101,7 @@ def process_keep_relevant(
     max_price: float = None,
     min_artwork_count: int = None,
     max_missing_percent: float = None,
+    filter_by_column: tuple[str, str] = None,
     verbose: bool = True,
 ):
     pipeline = DataFilterPipeline(verbose)
@@ -112,5 +114,8 @@ def process_keep_relevant(
 
     if max_missing_percent is not None:
         pipeline.add_step(MissingValueFilter(max_missing_percent))
+
+    if filter_by_column is not None:
+        pipeline.add_step(FilterByColumn(filter_by_column[0], filter_by_column[1]))
 
     return pipeline.apply(df)

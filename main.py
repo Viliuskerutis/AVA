@@ -132,6 +132,7 @@ if __name__ == "__main__":
             min_price=None,
             max_price=None,
             max_missing_percent=None,
+            filter_by_column=None,
         )
 
         # Initialization of regressor and predictor can be done once when server is run

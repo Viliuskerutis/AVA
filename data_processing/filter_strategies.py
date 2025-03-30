@@ -8,6 +8,29 @@ from data_processing.base_filter import BaseFilter
 from datetime import datetime
 
 
+class FilterByColumn(BaseFilter):
+    """
+    Filters rows based on a specific column and its value.
+    """
+
+    def __init__(self, column_name: str, value: str):
+        """
+        :param column_name: Name of the column to filter by.
+        :param value: Value to filter for.
+        """
+        self.column_name = column_name
+        self.value = value
+
+    def apply(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Filters the DataFrame based on the specified column and value.
+
+        :param df: Input DataFrame.
+        :return: Filtered DataFrame.
+        """
+        return df[df[self.column_name] == self.value].reset_index(drop=True)
+
+
 class MissingValueFilter(BaseFilter):
     """
     Removes rows with more than a specified percentage of missing values.
