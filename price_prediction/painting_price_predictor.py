@@ -17,6 +17,7 @@ from helpers.file_manager import FileManager
 from helpers.property_modifier import PropertyModifier
 from price_prediction.embedding_model_type import EmbeddingModelType
 from price_prediction.regressors.base_regressor import BaseRegressor
+from price_prediction.regressors.neural_network_regressor import NeuralNetworkRegressor
 
 
 class PaintingPricePredictor:
@@ -155,19 +156,19 @@ class PaintingPricePredictor:
             )
         else:
             descriptions = (
-                df[
-                    text_columns
-                    + ([] if self.use_separate_numeric_features else numeric_columns)
-                ]
+                df[text_columns]
                 .astype(str)
-                .agg(" - ".join, axis=1)
+                .apply(
+                    lambda row: ", ".join(f"{col}: {val}" for col, val in row.items()),
+                    axis=1,
+                )
             )
             embeddings = self.model.encode(descriptions.tolist()).astype("float32")
 
         if self.use_separate_numeric_features:
             if not hasattr(self, "scaler"):
                 self.scaler = StandardScaler()
-                numeric_data = self.scaler.fit_transform(df[numeric_columns])
+            numeric_data = self.scaler.fit_transform(df[numeric_columns])
             return np.hstack((embeddings, numeric_data))
 
         return embeddings
@@ -189,15 +190,19 @@ class PaintingPricePredictor:
         if self.hot_encode_surface_material:
             if "Surface" in df.columns:
                 surfaces = df["Surface"].str.get_dummies()
+                surfaces.columns = [f"surface_{col}" for col in surfaces.columns]
                 df = pd.concat([df, surfaces], axis=1)
                 self.additional_numeric_columns += surfaces.columns.tolist()
-                self.TEXT_COLUMNS.remove("Surface")
+                if "Surface" in self.TEXT_COLUMNS:
+                    self.TEXT_COLUMNS.remove("Surface")
 
             if "Materials" in df.columns:
                 materials = df["Materials"].str.get_dummies()
+                materials.columns = [f"materials_{col}" for col in materials.columns]
                 df = pd.concat([df, materials], axis=1)
                 self.additional_numeric_columns += materials.columns.tolist()
-                self.TEXT_COLUMNS.remove("Materials")
+                if "Materials" in self.TEXT_COLUMNS:
+                    self.TEXT_COLUMNS.remove("Materials")
 
         # Add additional data dynamically
         if self.use_artfacts:
@@ -263,19 +268,21 @@ class PaintingPricePredictor:
         return df
 
     def train(self, df: pd.DataFrame) -> None:
-        """
-        Preprocesses data, extracts features, and trains the regressor.
-        """
         self.regressor.clear_fit()
         df = self.preprocess_data(df)
         X = self.generate_combined_embeddings(df)
         y = df["Sold Price"].astype(float)
 
-        # Store the feature columns and types
         self.regressor.feature_columns = df.columns.tolist()
         self.regressor.feature_types = df.dtypes.to_dict()
 
-        self.regressor.train(X, y)
+        if isinstance(self.regressor, NeuralNetworkRegressor):
+            X_train, X_validation, y_train, y_validation = train_test_split(
+                X, y, test_size=0.2, random_state=42
+            )
+            self.regressor.train(X_train, y_train, X_validation, y_validation)
+        else:
+            self.regressor.train(X, y)
 
     def predict_single_painting(
         self, row: Union[Dict[str, Any], pd.Series]
@@ -319,14 +326,18 @@ class PaintingPricePredictor:
         if unexpected_columns:
             print(f"Warning: Unexpected columns in input data: {unexpected_columns}")
 
-        # Add missing columns with default values.
+        # Add missing columns with default values and update additional columns
         for col in self.regressor.feature_columns:
             if col not in df.columns:
                 expected_dtype = self.regressor.feature_types[col]
                 if pd.api.types.is_numeric_dtype(expected_dtype):
-                    df[col] = 0
+                    df[col] = -1
+                    if col not in self.NUMERIC_COLUMNS:
+                        self.additional_numeric_columns.append(col)
                 else:
                     df[col] = "Unknown"
+                    if col not in self.TEXT_COLUMNS:
+                        self.additional_text_columns.append(col)
 
         # Keep only the expected columns and reorder them.
         df = df[self.regressor.feature_columns]
@@ -347,10 +358,16 @@ class PaintingPricePredictor:
 
         X, y = self.generate_combined_embeddings(df), df["Sold Price"].astype(float)
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
+            X, y, test_size=0.3, random_state=42
         )
 
-        self.regressor.train(X_train, y_train)
+        if isinstance(self.regressor, NeuralNetworkRegressor):
+            X_validation, X_test, y_validation, y_test = train_test_split(
+                X_test, y_test, test_size=0.6, random_state=42
+            )
+            self.regressor.train(X_train, y_train, X_validation, y_validation)
+        else:
+            self.regressor.train(X_train, y_train)
         y_pred = self.regressor.predict(X_test)
 
         print(f"MAE: {mean_absolute_error(y_test, y_pred)}")

@@ -82,8 +82,9 @@ def predict_price(
     force_retrain: bool = False,
 ) -> float:
     # For experimentation (skips loading weights, retrains each time)
-    # print(predictor.predict_with_test_split(data_df))
+    print(predictor.predict_with_test_split(data_df))
 
+    # TODO: Fix weights with switch of different models
     if force_retrain or not predictor.regressor.load_model(REGRESSOR_LIGHTGBM_PKL_PATH):
         print(
             "No regressor model found or force retrain enabled. Training and saving new model..."
@@ -139,16 +140,16 @@ if __name__ == "__main__":
 
         # regressor = KNNRegressor(n_neighbors=5)
         # regressor = RandomForestCustomRegressor(n_estimators=10)
-        regressor = LightGBMRegressor(n_estimators=500)
-        # regressor = NeuralNetworkRegressor(
-        #     hidden_units=2048,
-        #     learning_rate=0.01,
-        #     epochs=1000,
-        #     batch_size=32,
-        #     patience=6,
-        #     lr_patience=3,
-        #     lr_factor=0.25,
-        # )
+        # regressor = LightGBMRegressor(n_estimators=500)
+        regressor = NeuralNetworkRegressor(
+            hidden_units=1024,
+            learning_rate=0.001,
+            epochs=1000,
+            batch_size=32,
+            patience=10,
+            lr_patience=5,
+            lr_factor=0.25,
+        )
         # regressor = HistogramGradientBoostingRegressor()
 
         predictor = PaintingPricePredictor(

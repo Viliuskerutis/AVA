@@ -29,7 +29,11 @@ class MissingValueFilter(BaseFilter):
         :return: Filtered DataFrame.
         """
         # Replace placeholders (-1 and "Unknown") with NaN for proper missing value detection
-        df_temp = df.replace({-1: np.nan, "Unknown": np.nan})
+        df_temp = df.copy()
+        for col in df.columns:
+            df_temp[col] = df_temp[col].apply(
+                lambda x: np.nan if x == -1 or x == "Unknown" else x
+            )
 
         # Calculate the percentage of missing values for each row
         missing_percent = df_temp.isnull().mean(axis=1)
