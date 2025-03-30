@@ -33,7 +33,6 @@ class PaintingPricePredictor:
         "Height",
         "Years from auction till now",
         "Years from creation till auction",
-        # "Years from creation till auction",
         # "Years from birth till creation",
         "Artist Lifetime",
         "Average Sold Price",
@@ -95,9 +94,9 @@ class PaintingPricePredictor:
 
     def fill_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Ensures all columns have non-null values (text columns get 'Unknown', numeric get 0).
+        Ensures all columns have non-null values (text columns get 'Unknown', numeric get -1).
         """
-        return df.fillna({"": "Unknown"}).fillna(0).reset_index(drop=True)
+        return df.fillna({"": "Unknown"}).fillna(-1).reset_index(drop=True)
 
     def convert_columns_to_numeric(
         self, df: pd.DataFrame, columns: List[str]

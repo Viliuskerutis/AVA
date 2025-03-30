@@ -10,7 +10,6 @@ from config import (
     IMAGE_FEATURES_PKL_PATH,
     IMAGES_PATH,
     CSVS_PATH,
-    REGRESSOR_LIGHTGBM_PKL_PATH,
     SIMILARITY_MODEL_NAME,
     DEVICE,
     OPTIMAL_SIMILARITY_THRESHOLD,
@@ -82,7 +81,7 @@ def predict_price(
     force_retrain: bool = False,
 ) -> float:
     # For experimentation (skips loading weights, retrains each time)
-    print(predictor.predict_with_test_split(data_df))
+    # print(predictor.predict_with_test_split(data_df))
 
     if force_retrain or not predictor.regressor.load_model(predictor.regressor.path):
         print(
@@ -154,7 +153,7 @@ if __name__ == "__main__":
 
         predictor = PaintingPricePredictor(
             regressor=regressor,
-            max_missing_percent=0.3,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
+            max_missing_percent=0.05,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
             use_separate_numeric_features=True,
             encode_per_column=True,
             hot_encode_surface_material=True,
