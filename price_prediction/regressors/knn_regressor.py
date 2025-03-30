@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.neighbors import KNeighborsRegressor
 
+from config import REGRESSOR_KNN_PKL_PATH
 from price_prediction.regressors.base_regressor import BaseRegressor
 
 
@@ -11,6 +12,7 @@ class KNNRegressor(BaseRegressor):
         super().__init__(n_neighbors=n_neighbors, **kwargs)
 
         self.model = KNeighborsRegressor(n_neighbors=n_neighbors, **kwargs)
+        self.path = REGRESSOR_KNN_PKL_PATH
 
     def clear_fit(self):
         self.model = KNeighborsRegressor(**self.params)

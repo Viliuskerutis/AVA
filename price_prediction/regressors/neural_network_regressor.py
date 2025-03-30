@@ -7,6 +7,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from sklearn.preprocessing import StandardScaler
 
+from config import REGRESSOR_NEURAL_NETWORK_PKL_PATH
 from helpers.file_manager import FileManager
 from .base_regressor import BaseRegressor
 
@@ -85,6 +86,8 @@ class NeuralNetworkRegressor(BaseRegressor):
         # self.criterion = nn.MSELoss()
         self.criterion = MAPELoss()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.path = REGRESSOR_NEURAL_NETWORK_PKL_PATH
 
     def _build_model(self):
         return nn.Sequential(

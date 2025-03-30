@@ -84,13 +84,12 @@ def predict_price(
     # For experimentation (skips loading weights, retrains each time)
     print(predictor.predict_with_test_split(data_df))
 
-    # TODO: Fix weights with switch of different models
-    if force_retrain or not predictor.regressor.load_model(REGRESSOR_LIGHTGBM_PKL_PATH):
+    if force_retrain or not predictor.regressor.load_model(predictor.regressor.path):
         print(
             "No regressor model found or force retrain enabled. Training and saving new model..."
         )
         predictor.train(data_df)
-        predictor.regressor.save_model(REGRESSOR_LIGHTGBM_PKL_PATH)
+        predictor.regressor.save_model(predictor.regressor.path)
 
     predicted_price = predictor.predict_single_painting(painting_data_dict)
 

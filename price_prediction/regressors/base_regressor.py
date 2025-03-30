@@ -13,6 +13,8 @@ class BaseRegressor(ABC):
         self.feature_columns = []
         self.feature_types = []
 
+        self.path = None
+
     @abstractmethod
     def clear_fit() -> None:
         pass

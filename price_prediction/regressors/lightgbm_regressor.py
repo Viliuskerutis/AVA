@@ -2,6 +2,7 @@ import numpy as np
 from lightgbm import LGBMRegressor
 import pandas as pd
 
+from config import REGRESSOR_LIGHTGBM_PKL_PATH
 from price_prediction.regressors.base_regressor import BaseRegressor
 
 
@@ -12,6 +13,7 @@ class LightGBMRegressor(BaseRegressor):
         super().__init__(n_estimators=n_estimators, **kwargs)
 
         self.model = LGBMRegressor(n_estimators=n_estimators, random_state=42, **kwargs)
+        self.path = REGRESSOR_LIGHTGBM_PKL_PATH
 
     def clear_fit(self):
         self.model = LGBMRegressor(**self.params)

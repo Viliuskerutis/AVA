@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 
+from config import REGRESSOR_RANDOM_FOREST_PKL_PATH
 from price_prediction.regressors.base_regressor import BaseRegressor
 
 
@@ -13,6 +14,7 @@ class RandomForestCustomRegressor(BaseRegressor):
         self.model = RandomForestRegressor(
             n_estimators=n_estimators, random_state=42, **kwargs
         )
+        self.path = REGRESSOR_RANDOM_FOREST_PKL_PATH
 
     def clear_fit(self):
         self.model = RandomForestRegressor(**self.params)
