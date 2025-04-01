@@ -99,6 +99,7 @@ class Artsy:
         return artists_artsy
 
     def write_to_csv(self, filename, artists):
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
         with open(filename, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             writer.writerow(["Name", "Nationality", "Years", "Followers", "Description",
