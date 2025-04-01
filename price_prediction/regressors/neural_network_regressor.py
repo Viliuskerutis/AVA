@@ -1,4 +1,5 @@
-from sklearn.base import check_is_fitted
+import random
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn.utils import clip_grad_norm_
@@ -10,6 +11,20 @@ from sklearn.preprocessing import StandardScaler
 from config import REGRESSOR_NEURAL_NETWORK_PKL_PATH
 from helpers.file_manager import FileManager
 from .base_regressor import BaseRegressor
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+set_seed(42)
 
 
 class MAPELoss(nn.Module):
