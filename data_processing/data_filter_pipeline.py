@@ -73,6 +73,14 @@ def process_after_scraping(df):
     return pipeline.apply(df)
 
 
+def ensure_data_filled_and_correct(df):
+    pipeline = DataFilterPipeline()
+
+    pipeline.add_step(EnsureDataFilledAndCorrectFilter())
+
+    return pipeline.apply(df)
+
+
 def process_for_predictions(df):
     raise NotImplementedError
     pipeline = DataFilterPipeline()

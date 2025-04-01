@@ -1,6 +1,8 @@
 import pandas as pd
 import unicodedata
+import re
 from pandas.api.types import is_numeric_dtype
+from rapidfuzz import fuzz, process
 
 from helpers.file_manager import FileManager
 
@@ -29,13 +31,25 @@ class PropertyModifier:
     @staticmethod
     def add_additional_data(
         df: pd.DataFrame,
-        df_column: str,
+        df_key_column: str,
         csv_path: str,
-        csv_column: str,
+        csv_key_column: str,
         columns_to_exclude: list[str] = [],
+        columns_to_include: list[str] = [],
+        fuzzy_threshold: int = 85,
+        use_fuzzy_matching: bool = False,
+        use_partial_matching: bool = False,
+        verbose: bool = False,
     ) -> tuple[pd.DataFrame, list[str], list[str]]:
+        if columns_to_exclude and columns_to_include:
+            raise ValueError(
+                "Only one of columns_to_exclude or columns_to_include can be specified."
+            )
+
         def normalize_key(value):
             value = str(value)
+            # Remove text inside brackets (e.g., "(Pranas)")
+            value = re.sub(r"\(.*?\)", "", value)
             # Remove accents
             value = unicodedata.normalize("NFKD", value)
             value = "".join(c for c in value if not unicodedata.combining(c))
@@ -43,17 +57,27 @@ class PropertyModifier:
             value = value.replace(".", "").replace("-", " ")
             # Lowercase and sort words alphabetically
             words = value.lower().split()
+            # Return a normalized string for fuzzy matching
             return " ".join(sorted(words))
 
         extra_data = FileManager.read_single_csv(csv_path)
 
-        columns_to_exclude = set(columns_to_exclude)
-        columns_to_exclude.discard(csv_column)
-        extra_data = extra_data.drop(
-            columns=[col for col in columns_to_exclude if col in extra_data.columns]
-        )
+        if columns_to_include:
+            # Include only the specified columns and the csv_column
+            columns_to_include = set(columns_to_include)
+            columns_to_include.add(csv_key_column)
+            extra_data = extra_data[
+                [col for col in extra_data.columns if col in columns_to_include]
+            ]
+        else:
+            # Exclude the specified columns except the csv_column
+            columns_to_exclude = set(columns_to_exclude)
+            columns_to_exclude.discard(csv_key_column)
+            extra_data = extra_data.drop(
+                columns=[col for col in columns_to_exclude if col in extra_data.columns]
+            )
 
-        extra_columns = [col for col in extra_data.columns if col != csv_column]
+        extra_columns = [col for col in extra_data.columns if col != csv_key_column]
         extra_text_cols = []
         extra_numeric_cols = []
         for col in extra_columns:
@@ -62,15 +86,55 @@ class PropertyModifier:
             else:
                 extra_text_cols.append(col)
 
-        # Create a normalized key for joining
-        df["match_key"] = df[df_column].apply(normalize_key)
-        extra_data["match_key"] = extra_data[csv_column].apply(normalize_key)
+        # Normalize keys for joining
+        df["match_key"] = df[df_key_column].apply(normalize_key)
+        extra_data["match_key"] = extra_data[csv_key_column].apply(normalize_key)
 
-        # Drop the merge column and join on the match key
-        extra_data = extra_data.drop(columns=[csv_column])
+        # Perform exact and partial matching
+        matched_keys = set()
+        unmatched_keys = set(extra_data["match_key"])
+        match_map = {}
+
+        for df_key in df["match_key"]:
+            # First, try exact matching
+            if df_key in unmatched_keys:
+                matched_keys.add(df_key)
+                unmatched_keys.discard(df_key)
+                match_map[df_key] = df_key
+            elif use_partial_matching:
+                # Try partial matching if enabled
+                for extra_key in unmatched_keys:
+                    if set(df_key.split()).issubset(set(extra_key.split())) or set(
+                        extra_key.split()
+                    ).issubset(set(df_key.split())):
+                        matched_keys.add(df_key)
+                        unmatched_keys.discard(extra_key)
+                        match_map[df_key] = extra_key
+                        break
+            else:
+                # Fuzzy matching as a fallback (only if enabled)
+                if use_fuzzy_matching:
+                    best_match = process.extractOne(
+                        df_key, unmatched_keys, scorer=fuzz.token_sort_ratio
+                    )
+                    if best_match and best_match[1] >= fuzzy_threshold:
+                        matched_keys.add(df_key)
+                        unmatched_keys.discard(best_match[0])
+                        match_map[df_key] = best_match[0]
+
+        if verbose:
+            print(f"Number of connected keys: {len(matched_keys)}")
+            print(f"Unmatched keys from '{csv_key_column}': {list(unmatched_keys)}")
+
+        # Map the matched keys back to their original data
+        extra_data = extra_data[extra_data["match_key"].isin(matched_keys)]
         extra_data = extra_data.set_index("match_key")
+        extra_data = extra_data.rename(
+            columns={csv_key_column: f"{csv_key_column}_temp"}
+        )
         df = df.set_index("match_key")
         df = df.join(extra_data, how="left")
+        df = df.drop(columns=[f"{csv_key_column}_temp"], errors="ignore")
         df = df.reset_index(drop=True)
 
         return df, extra_text_cols, extra_numeric_cols

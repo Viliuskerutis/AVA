@@ -150,7 +150,9 @@ class NeuralNetworkRegressor(BaseRegressor):
         X_train = self.scaler.fit_transform(X_train)
         X_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(self.device)
         y_train_tensor = (
-            torch.tensor(y_train, dtype=torch.float32).view(-1, 1).to(self.device)
+            torch.tensor(y_train.to_numpy(), dtype=torch.float32)
+            .view(-1, 1)
+            .to(self.device)
         )
         train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
         train_dataloader = DataLoader(

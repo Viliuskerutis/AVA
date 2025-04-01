@@ -12,7 +12,10 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 
-from data_processing.data_filter_pipeline import process_keep_relevant
+from data_processing.data_filter_pipeline import (
+    ensure_data_filled_and_correct,
+    process_keep_relevant,
+)
 from helpers.file_manager import FileManager
 from helpers.property_modifier import PropertyModifier
 from price_prediction.embedding_model_type import EmbeddingModelType
@@ -91,12 +94,6 @@ class PaintingPricePredictor:
 
         self.additional_text_columns = []
         self.additional_numeric_columns = []
-
-    def fill_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Ensures all columns have non-null values (text columns get 'Unknown', numeric get -1).
-        """
-        return df.fillna({"": "Unknown"}).fillna(-1).reset_index(drop=True)
 
     def convert_columns_to_numeric(
         self, df: pd.DataFrame, columns: List[str]
@@ -185,34 +182,28 @@ class PaintingPricePredictor:
         self.additional_text_columns = []
         self.additional_numeric_columns = []
 
-        # Hot-encode provided columns
-        if self.hot_encode_columns:
-            for col in self.hot_encode_columns:
-                if col in df.columns:
-                    hot_encoded = df[col].str.get_dummies()
-                    hot_encoded.columns = [f"{col}_{c}" for c in hot_encoded.columns]
-                    df = pd.concat([df, hot_encoded], axis=1)
-                    self.additional_numeric_columns += hot_encoded.columns.tolist()
-                    if col in self.TEXT_COLUMNS:
-                        self.TEXT_COLUMNS.remove(col)
-                else:
-                    print(f"Warning: Column '{col}' not found in DataFrame.")
-
         # Add additional data dynamically
         if self.use_artfacts:
             df, art_text, art_numeric = PropertyModifier.add_additional_data(
-                df,
-                "Artist name",
-                self.artist_info_path,
-                "Name",
-                ["Birth Year", "Death Year"],
+                df=df,
+                df_key_column="Artist name",
+                csv_path=self.artist_info_path,
+                csv_key_column="Name",
+                columns_to_exclude=["Birth Year", "Death Year"],
+                # columns_to_include=["Nationality"],
+                use_fuzzy_matching=True,
+                use_partial_matching=True,
             )
             self.additional_text_columns += art_text
             self.additional_numeric_columns += art_numeric
 
         if self.use_count:
             df, count_text, count_numeric = PropertyModifier.add_additional_data(
-                df, "Artist name", self.artist_count_path, "name", ["path"]
+                df=df,
+                df_key_column="Artist name",
+                csv_path=self.artist_count_path,
+                csv_key_column="name",
+                columns_to_exclude=["path"],
             )
             self.additional_text_columns += count_text
             self.additional_numeric_columns += count_numeric
@@ -227,28 +218,35 @@ class PaintingPricePredictor:
 
         if self.use_synthetic:
             df, synth_text, synth_numeric = PropertyModifier.add_additional_data(
-                df,
-                "Artist name",
-                self.synthetic_paths[0],
-                "Artist name",
-                ["Score Explanations"],
+                df=df,
+                df_key_column="Artist name",
+                csv_path=self.synthetic_paths[0],
+                csv_key_column="Artist name",
+                columns_to_exclude=["Score Explanations"],
+                use_fuzzy_matching=True,
+                use_partial_matching=True,
             )
             self.additional_text_columns += synth_text
             self.additional_numeric_columns += synth_numeric
 
             df, synth_text2, synth_numeric2 = PropertyModifier.add_additional_data(
-                df,
-                "Auction House",
-                self.synthetic_paths[1],
-                "Auction House",
-                ["Score Explanations"],
+                df=df,
+                df_key_column="Auction House",
+                csv_path=self.synthetic_paths[1],
+                csv_key_column="Auction House",
+                columns_to_exclude=["Score Explanations"],
+                use_fuzzy_matching=True,
+                use_partial_matching=True,
             )
             self.additional_text_columns += synth_text2
             self.additional_numeric_columns += synth_numeric2
 
         if self.use_artsy:
             df, artsy_text, artsy_numeric = PropertyModifier.add_additional_data(
-                df, "Artist name", self.artsy_path, "Name", []
+                df=df,
+                df_key_column="Artist name",
+                csv_path=self.artsy_path,
+                csv_key_column="Name",
             )
             self.additional_text_columns += artsy_text
             self.additional_numeric_columns += artsy_numeric
@@ -257,6 +255,22 @@ class PaintingPricePredictor:
         if self.use_count:
             # Additional filtering to keep relevant artists only (with no less than `min_artwork_count`)
             df = process_keep_relevant(df, min_artwork_count=None, verbose=False)
+
+        # Fill missing values with "Unknown" or -1 based on the column type
+        df = ensure_data_filled_and_correct(df)
+
+        # Hot-encode provided columns (needs to be after filling missing data)
+        if self.hot_encode_columns:
+            for col in self.hot_encode_columns:
+                if col in df.columns:
+                    hot_encoded = df[col].str.get_dummies()
+                    hot_encoded.columns = [f"{col}_{c}" for c in hot_encoded.columns]
+                    df = pd.concat([df, hot_encoded], axis=1)
+                    self.additional_numeric_columns += hot_encoded.columns.tolist()
+                    if col in self.TEXT_COLUMNS:
+                        self.TEXT_COLUMNS.remove(col)
+                else:
+                    print(f"Warning: Column '{col}' not found in DataFrame.")
 
         df = process_keep_relevant(df, max_missing_percent=self.max_missing_percent)
         return df
