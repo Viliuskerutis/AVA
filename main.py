@@ -32,6 +32,11 @@ from price_prediction.regressors.histogram_gradient_boosting_regressor import (
 from price_prediction.regressors.knn_regressor import KNNRegressor
 from price_prediction.regressors.lightgbm_regressor import LightGBMRegressor
 import pandas as pd
+from price_prediction.regressors.neural_network.basic_model import BasicModel
+from price_prediction.regressors.neural_network.residual_model import ResidualModel
+from price_prediction.regressors.neural_network.wide_and_deep_model import (
+    WideAndDeepModel,
+)
 from price_prediction.regressors.neural_network_regressor import NeuralNetworkRegressor
 from price_prediction.regressors.random_forest_regressor import (
     RandomForestCustomRegressor,
@@ -141,6 +146,7 @@ if __name__ == "__main__":
         # regressor = RandomForestCustomRegressor(n_estimators=10)
         # regressor = LightGBMRegressor(n_estimators=500)
         regressor = NeuralNetworkRegressor(
+            model_class=WideAndDeepModel,
             hidden_units=1024,
             learning_rate=0.001,
             epochs=1000,
@@ -174,7 +180,9 @@ if __name__ == "__main__":
         )
 
         # This should be the user painting information from UI (temporarily picking random value)
-        random_painting_data = data_for_prediction_df.sample(n=1).iloc[0].to_dict()
+        random_painting_data = (
+            data_for_prediction_df.sample(n=1, random_state=21).iloc[0].to_dict()
+        )
 
         predicted_price = predict_price(
             predictor,

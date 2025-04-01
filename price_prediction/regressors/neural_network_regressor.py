@@ -10,6 +10,8 @@ from sklearn.preprocessing import StandardScaler
 
 from config import REGRESSOR_NEURAL_NETWORK_PKL_PATH
 from helpers.file_manager import FileManager
+from price_prediction.regressors.neural_network.base_model import BaseModel
+from price_prediction.regressors.neural_network.mape_loss import MAPELoss
 from .base_regressor import BaseRegressor
 
 
@@ -27,60 +29,10 @@ def set_seed(seed):
 set_seed(42)
 
 
-class MAPELoss(nn.Module):
-    def forward(self, y_pred, y_true):
-        epsilon = 1e-8  # To avoid division by zero
-        return torch.mean(torch.abs((y_true - y_pred) / (y_true + epsilon))) * 100
-
-
-class WideAndDeepModel(nn.Module):
-    def __init__(self, input_size, hidden_units):
-        super().__init__()
-        # Wide component
-        self.wide = nn.Linear(input_size, 1)
-        # Deep component
-        self.deep = nn.Sequential(
-            nn.Linear(input_size, hidden_units),
-            nn.ReLU(),
-            nn.BatchNorm1d(hidden_units),
-            nn.Dropout(0.3),
-            nn.Linear(hidden_units, hidden_units),
-            nn.ReLU(),
-            nn.BatchNorm1d(hidden_units),
-            nn.Dropout(0.3),
-            nn.Linear(hidden_units, 1),
-        )
-
-    def forward(self, x):
-        wide_out = self.wide(x)
-        deep_out = self.deep(x)
-        return wide_out + deep_out  # Combine wide and deep outputs
-
-
-class ResidualBlock(nn.Module):
-    def __init__(self, input_size, hidden_units):
-        super().__init__()
-        self.fc1 = nn.Linear(input_size, hidden_units)
-        self.bn1 = nn.BatchNorm1d(hidden_units)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_units, hidden_units)
-        self.bn2 = nn.BatchNorm1d(hidden_units)
-
-    def forward(self, x):
-        residual = x
-        out = self.fc1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.fc2(out)
-        out = self.bn2(out)
-        out += residual  # Add skip connection
-        out = self.relu(out)
-        return out
-
-
 class NeuralNetworkRegressor(BaseRegressor):
     def __init__(
         self,
+        model_class: BaseModel,
         hidden_units=128,
         learning_rate=0.001,
         epochs=100,
@@ -90,6 +42,7 @@ class NeuralNetworkRegressor(BaseRegressor):
         lr_factor=0.5,  # Learning rate reduction factor
     ):
         super().__init__()
+        self.model_class = model_class
         self.hidden_units = hidden_units
         self.learning_rate = learning_rate
         self.epochs = epochs
@@ -98,6 +51,7 @@ class NeuralNetworkRegressor(BaseRegressor):
         self.lr_patience = lr_patience
         self.lr_factor = lr_factor
         self.scaler = StandardScaler()
+        # self.criterion = nn.L1Loss()  # MAE
         # self.criterion = nn.MSELoss()
         self.criterion = MAPELoss()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -105,29 +59,7 @@ class NeuralNetworkRegressor(BaseRegressor):
         self.path = REGRESSOR_NEURAL_NETWORK_PKL_PATH
 
     def _build_model(self):
-        return nn.Sequential(
-            nn.Linear(self.input_size, self.hidden_units),
-            nn.ReLU(),
-            nn.BatchNorm1d(self.hidden_units),
-            nn.Dropout(0.3),
-            nn.Linear(self.hidden_units, self.hidden_units),
-            nn.ReLU(),
-            nn.BatchNorm1d(self.hidden_units),
-            nn.Dropout(0.3),
-            nn.Linear(self.hidden_units, 1),
-        )
-
-    # def _build_model(self):
-    #     return nn.Sequential(
-    #         nn.Linear(self.input_size, self.hidden_units),
-    #         nn.ReLU(),
-    #         ResidualBlock(self.hidden_units, self.hidden_units),
-    #         nn.Dropout(0.3),
-    #         nn.Linear(self.hidden_units, 1),
-    #     )
-
-    # def _build_model(self):
-    #     return WideAndDeepModel(self.input_size, self.hidden_units)
+        return self.model_class(self.input_size, self.hidden_units)
 
     def clear_fit(self):
         if hasattr(self, "model"):
