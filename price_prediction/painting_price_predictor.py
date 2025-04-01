@@ -58,7 +58,7 @@ class PaintingPricePredictor:
         max_missing_percent: float,
         use_separate_numeric_features: bool,
         encode_per_column: bool,
-        hot_encode_surface_material: bool,
+        hot_encode_columns: List[str],
         use_artfacts: bool,
         use_images: int,
         use_count: bool,
@@ -75,7 +75,7 @@ class PaintingPricePredictor:
         self.max_missing_percent = max_missing_percent
         self.use_separate_numeric_features = use_separate_numeric_features
         self.encode_per_column = encode_per_column
-        self.hot_encode_surface_material = hot_encode_surface_material
+        self.hot_encode_columns = hot_encode_columns
         self.use_artfacts = use_artfacts
         self.use_images = use_images
         self.use_count = use_count
@@ -185,23 +185,18 @@ class PaintingPricePredictor:
         self.additional_text_columns = []
         self.additional_numeric_columns = []
 
-        # Hot-encode surfaces and materials
-        if self.hot_encode_surface_material:
-            if "Surface" in df.columns:
-                surfaces = df["Surface"].str.get_dummies()
-                surfaces.columns = [f"surface_{col}" for col in surfaces.columns]
-                df = pd.concat([df, surfaces], axis=1)
-                self.additional_numeric_columns += surfaces.columns.tolist()
-                if "Surface" in self.TEXT_COLUMNS:
-                    self.TEXT_COLUMNS.remove("Surface")
-
-            if "Materials" in df.columns:
-                materials = df["Materials"].str.get_dummies()
-                materials.columns = [f"materials_{col}" for col in materials.columns]
-                df = pd.concat([df, materials], axis=1)
-                self.additional_numeric_columns += materials.columns.tolist()
-                if "Materials" in self.TEXT_COLUMNS:
-                    self.TEXT_COLUMNS.remove("Materials")
+        # Hot-encode provided columns
+        if self.hot_encode_columns:
+            for col in self.hot_encode_columns:
+                if col in df.columns:
+                    hot_encoded = df[col].str.get_dummies()
+                    hot_encoded.columns = [f"{col}_{c}" for c in hot_encoded.columns]
+                    df = pd.concat([df, hot_encoded], axis=1)
+                    self.additional_numeric_columns += hot_encoded.columns.tolist()
+                    if col in self.TEXT_COLUMNS:
+                        self.TEXT_COLUMNS.remove(col)
+                else:
+                    print(f"Warning: Column '{col}' not found in DataFrame.")
 
         # Add additional data dynamically
         if self.use_artfacts:

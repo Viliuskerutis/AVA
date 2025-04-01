@@ -156,7 +156,7 @@ if __name__ == "__main__":
             max_missing_percent=0.05,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
             use_separate_numeric_features=True,
             encode_per_column=True,
-            hot_encode_surface_material=True,
+            hot_encode_columns=["Surface", "Materials"],
             use_artfacts=False,
             use_images=0,
             use_count=True,
