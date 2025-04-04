@@ -28,6 +28,7 @@ AUCTION_HOUSE_SYNTHETIC_CSV_PATH = (
     f"{ADDITIONAL_DATA_PATH}/auction_houses_gpt4omini.csv"
 )
 ARTSY_CSV_PATH = f"{ADDITIONAL_DATA_PATH}/artsy_artists.csv"
+FILTERED_COMBINED_DATA_PATH = f"{ADDITIONAL_DATA_PATH}/artfacts_and_synthetic.csv"
 
 # Fitted model weight paths
 REGRESSOR_HISTOGRAM_GRADIENT_BOOSTING_PKL_PATH = (
