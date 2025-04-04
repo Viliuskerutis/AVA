@@ -1,6 +1,7 @@
 from typing import Dict
 from pandas import DataFrame
 from tqdm import tqdm
+from sklearn.linear_model import LinearRegression
 from config import (
     ARTIST_COUNT_CSV_PATH,
     ARTIST_INFORMATION_CSV_PATH,
@@ -41,7 +42,7 @@ from price_prediction.regressors.neural_network_regressor import NeuralNetworkRe
 from price_prediction.regressors.random_forest_regressor import (
     RandomForestCustomRegressor,
 )
-
+from price_prediction.painting_price_ensemble_predictor import PaintingPriceEnsemblePredictor
 
 def try_find_most_similar(
     image_path_dict: Dict[str, str], data_df: DataFrame, input_image_path: str
@@ -145,6 +146,7 @@ if __name__ == "__main__":
         # regressor = KNNRegressor(n_neighbors=5)
         # regressor = RandomForestCustomRegressor(n_estimators=10)
         # regressor = LightGBMRegressor(n_estimators=500)
+        # regressor1 = LightGBMRegressor(n_estimators=500)
         regressor = NeuralNetworkRegressor(
             model_class=WideAndDeepModel,
             hidden_units=1024,
@@ -157,6 +159,28 @@ if __name__ == "__main__":
         )
         # regressor = HistogramGradientBoostingRegressor()
 
+        # predictor = PaintingPriceEnsemblePredictor(
+        #     regressors=[regressor, regressor1],
+        #     meta_regressor=LinearRegression(),
+        #     max_missing_percent=0.15,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
+        #     use_separate_numeric_features=True,
+        #     encode_per_column=True,
+        #     hot_encode_columns=["Surface", "Materials"],
+        #     use_artfacts=True,
+        #     use_images=0,
+        #     use_count=True,
+        #     use_synthetic=True,
+        #     use_artsy=False,
+        #     embedding_model_type=EmbeddingModelType.ALL_MINILM,
+        #     artist_info_path=ARTIST_INFORMATION_CSV_PATH,
+        #     image_features_path=IMAGE_FEATURES_PKL_PATH,
+        #     artist_count_path=ARTIST_COUNT_CSV_PATH,
+        #     synthetic_paths=[
+        #         ARTIST_SYNTHETIC_CSV_PATH,
+        #         AUCTION_HOUSE_SYNTHETIC_CSV_PATH,
+        #     ],
+        #     artsy_path=ARTSY_CSV_PATH,
+        # )
         predictor = PaintingPricePredictor(
             regressor=regressor,
             max_missing_percent=0.05,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
