@@ -172,7 +172,7 @@ class PaintingPriceEnsemblePredictor:
 
         return embeddings
 
-    def preprocess_data(self, df: pd.DataFrame) -> pd.DataFrame:        
+    def preprocess_data(self, df: pd.DataFrame) -> pd.DataFrame:
         # df = pd.read_csv("data.csv")
         # return df
         """
@@ -292,16 +292,20 @@ class PaintingPriceEnsemblePredictor:
             regressor.feature_types = df.dtypes.to_dict()
 
             if isinstance(regressor, NeuralNetworkRegressor):
-                X_train, X_validation, y_train, y_validation = train_test_split(X, y, test_size=0.2, random_state=42)
+                X_train, X_validation, y_train, y_validation = train_test_split(
+                    X, y, test_size=0.2, random_state=42
+                )
                 regressor.train(X_train, y_train, X_validation, y_validation)
             else:
                 regressor.train(X, y)
-        
+
         self.meta_regressor = LinearRegression()
-        meta_features = np.column_stack([regressor.predict(X) for regressor in self.regressors])        
+        meta_features = np.column_stack(
+            [regressor.predict(X) for regressor in self.regressors]
+        )
         print("Meta features shape:", meta_features.shape)
         self.meta_regressor.fit(meta_features, y)
-        print("Meta regressor fitted:", hasattr(self.meta_regressor, 'coef_'))
+        print("Meta regressor fitted:", hasattr(self.meta_regressor, "coef_"))
 
     def predict_single_painting(
         self, row: Union[Dict[str, Any], pd.Series]
@@ -321,7 +325,9 @@ class PaintingPriceEnsemblePredictor:
         processed_df = self.preprocess_data(df_single)
         processed_df = self.filter_prediction_columns(processed_df)
         X = self.generate_combined_embeddings(processed_df)
-        base_predictions = np.column_stack([regressor.predict(X) for regressor in self.regressors])
+        base_predictions = np.column_stack(
+            [regressor.predict(X) for regressor in self.regressors]
+        )
         return self.meta_regressor.predict(base_predictions)[0]
 
     def filter_prediction_columns(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -356,10 +362,14 @@ class PaintingPriceEnsemblePredictor:
             if col not in df.columns:
                 expected_dtype = self.regressor.feature_types[col]
                 if pd.api.types.is_numeric_dtype(expected_dtype):
-                    numeric_defaults[col] = -1  # Set default for missing numeric columns
+                    numeric_defaults[col] = (
+                        -1
+                    )  # Set default for missing numeric columns
                     missing_numeric_cols.append(col)  # Track new numeric columns
                 else:
-                    text_defaults[col] = "Unknown"  # Set default for missing text columns
+                    text_defaults[col] = (
+                        "Unknown"  # Set default for missing text columns
+                    )
                     missing_text_cols.append(col)  # Track new text columns
 
         # Add all missing columns at once
@@ -389,12 +399,14 @@ class PaintingPriceEnsemblePredictor:
         """
         for regressor in self.regressors:
             regressor.clear_fit()
-        
+
         # Preprocess the data
         df = self.preprocess_data(df)
 
         X, y = self.generate_combined_embeddings(df), df["Sold Price"].astype(float)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.3, random_state=42
+        )
 
         # Train the base regressors
         for regressor in self.regressors:
@@ -406,10 +418,11 @@ class PaintingPriceEnsemblePredictor:
             else:
                 regressor.train(X_train, y_train)
 
-        base_test_preds = np.column_stack([regressor.predict(X_test) for regressor in self.regressors])
+        base_test_preds = np.column_stack(
+            [regressor.predict(X_test) for regressor in self.regressors]
+        )
 
-        if not hasattr(self.meta_regressor, 'coef_'):
-            self.meta_regressor = LinearRegression()
+        if not hasattr(self.meta_regressor, "coef_"):
             self.meta_regressor.fit(base_test_preds, y_test)
             print("Meta regressor has been fitted.")
 

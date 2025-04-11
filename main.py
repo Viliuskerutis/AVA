@@ -15,7 +15,6 @@ from config import (
     DEVICE,
     OPTIMAL_SIMILARITY_THRESHOLD,
 )
-
 from data_processing.data_filter_pipeline import (
     process_for_image_similarity,
     process_keep_relevant,
@@ -33,6 +32,7 @@ from price_prediction.regressors.histogram_gradient_boosting_regressor import (
 from price_prediction.regressors.knn_regressor import KNNRegressor
 from price_prediction.regressors.lightgbm_regressor import LightGBMRegressor
 import pandas as pd
+from price_prediction.regressors.mape_meta_regressor import MAPEMetaRegressor
 from price_prediction.regressors.neural_network.basic_model import BasicModel
 from price_prediction.regressors.neural_network.residual_model import ResidualModel
 from price_prediction.regressors.neural_network.wide_and_deep_model import (
@@ -42,7 +42,10 @@ from price_prediction.regressors.neural_network_regressor import NeuralNetworkRe
 from price_prediction.regressors.random_forest_regressor import (
     RandomForestCustomRegressor,
 )
-from price_prediction.painting_price_ensemble_predictor import PaintingPriceEnsemblePredictor
+from price_prediction.painting_price_ensemble_predictor import (
+    PaintingPriceEnsemblePredictor,
+)
+
 
 def try_find_most_similar(
     image_path_dict: Dict[str, str], data_df: DataFrame, input_image_path: str
@@ -87,18 +90,20 @@ def predict_price(
     force_retrain: bool = False,
 ) -> float:
     # For experimentation (skips loading weights, retrains each time)
-    # print(predictor.predict_with_test_split(data_df))
+    print(predictor.predict_with_test_split(data_df))
 
-    if force_retrain or not predictor.regressor.load_model(predictor.regressor.path):
-        print(
-            "No regressor model found or force retrain enabled. Training and saving new model..."
-        )
-        predictor.train(data_df)
-        predictor.regressor.save_model(predictor.regressor.path)
+    # if force_retrain or not predictor.regressor.load_model(predictor.regressor.path):
+    #     print(
+    #         "No regressor model found or force retrain enabled. Training and saving new model..."
+    #     )
+    #     predictor.train(data_df)
+    #     predictor.regressor.save_model(predictor.regressor.path)
 
-    predicted_price = predictor.predict_single_painting(painting_data_dict)
+    # predicted_price = predictor.predict_single_painting(painting_data_dict)
 
-    return predicted_price
+    # return predicted_price
+
+    return -1
 
 
 if __name__ == "__main__":
@@ -144,55 +149,34 @@ if __name__ == "__main__":
         # while `predict_price()` can be called per user request for performance
 
         # regressor = KNNRegressor(n_neighbors=5)
-        # regressor = RandomForestCustomRegressor(n_estimators=10)
+        # regressor = RandomForestCustomRegressor(n_estimators=20)
         # regressor = LightGBMRegressor(n_estimators=500)
-        # regressor1 = LightGBMRegressor(n_estimators=500)
-        regressor = NeuralNetworkRegressor(
+        regressor1 = NeuralNetworkRegressor(
             model_class=WideAndDeepModel,
             hidden_units=1024,
             learning_rate=0.001,
             epochs=1000,
-            batch_size=32,
-            patience=10,
+            batch_size=16,
+            patience=15,
             lr_patience=5,
             lr_factor=0.25,
         )
-        # regressor = HistogramGradientBoostingRegressor()
+        regressor2 = HistogramGradientBoostingRegressor()
 
-        # predictor = PaintingPriceEnsemblePredictor(
-        #     regressors=[regressor, regressor1],
-        #     meta_regressor=LinearRegression(),
-        #     max_missing_percent=0.15,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
-        #     use_separate_numeric_features=True,
-        #     encode_per_column=True,
-        #     hot_encode_columns=["Surface", "Materials"],
-        #     use_artfacts=True,
-        #     use_images=0,
-        #     use_count=True,
-        #     use_synthetic=True,
-        #     use_artsy=False,
-        #     embedding_model_type=EmbeddingModelType.ALL_MINILM,
-        #     artist_info_path=ARTIST_INFORMATION_CSV_PATH,
-        #     image_features_path=IMAGE_FEATURES_PKL_PATH,
-        #     artist_count_path=ARTIST_COUNT_CSV_PATH,
-        #     synthetic_paths=[
-        #         ARTIST_SYNTHETIC_CSV_PATH,
-        #         AUCTION_HOUSE_SYNTHETIC_CSV_PATH,
-        #     ],
-        #     artsy_path=ARTSY_CSV_PATH,
-        # )
-        predictor = PaintingPricePredictor(
-            regressor=regressor,
-            max_missing_percent=0.05,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
+        predictor = PaintingPriceEnsemblePredictor(
+            regressors=[regressor1, regressor2],
+            # meta_regressor=LinearRegression(),
+            meta_regressor=MAPEMetaRegressor(),
+            max_missing_percent=0.15,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
             use_separate_numeric_features=True,
-            encode_per_column=True,
+            encode_per_column=False,
             hot_encode_columns=["Surface", "Materials"],
             use_artfacts=False,
-            use_images=0,
+            use_images=50,
             use_count=True,
-            use_synthetic=False,
+            use_synthetic=True,
             use_artsy=False,
-            embedding_model_type=EmbeddingModelType.ALL_MINILM,
+            embedding_model_type=EmbeddingModelType.ALL_MPNET_BASE,
             artist_info_path=ARTIST_INFORMATION_CSV_PATH,
             image_features_path=IMAGE_FEATURES_PKL_PATH,
             artist_count_path=ARTIST_COUNT_CSV_PATH,
@@ -202,6 +186,27 @@ if __name__ == "__main__":
             ],
             artsy_path=ARTSY_CSV_PATH,
         )
+        # predictor = PaintingPricePredictor(
+        #     regressor=regressor,
+        #     max_missing_percent=0.15,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
+        #     use_separate_numeric_features=True,
+        #     encode_per_column=False,
+        #     hot_encode_columns=["Surface", "Materials"],
+        #     use_artfacts=False,
+        #     use_images=50,
+        #     use_count=True,
+        #     use_synthetic=True,
+        #     use_artsy=False,
+        #     embedding_model_type=EmbeddingModelType.ALL_MPNET_BASE,
+        #     artist_info_path=ARTIST_INFORMATION_CSV_PATH,
+        #     image_features_path=IMAGE_FEATURES_PKL_PATH,
+        #     artist_count_path=ARTIST_COUNT_CSV_PATH,
+        #     synthetic_paths=[
+        #         ARTIST_SYNTHETIC_CSV_PATH,
+        #         AUCTION_HOUSE_SYNTHETIC_CSV_PATH,
+        #     ],
+        #     artsy_path=ARTSY_CSV_PATH,
+        # )
 
         # This should be the user painting information from UI (temporarily picking random value)
         random_painting_data = (
