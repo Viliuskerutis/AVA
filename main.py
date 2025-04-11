@@ -1,7 +1,7 @@
+import os
 from typing import Dict
 from pandas import DataFrame
 from tqdm import tqdm
-from sklearn.linear_model import LinearRegression
 from config import (
     ARTIST_COUNT_CSV_PATH,
     ARTIST_INFORMATION_CSV_PATH,
@@ -84,26 +84,51 @@ def try_find_most_similar(
 
 
 def predict_price(
-    predictor: PaintingPricePredictor,
+    predictor: PaintingPricePredictor | PaintingPriceEnsemblePredictor,
     data_df: pd.DataFrame,
     painting_data_dict: Dict[str, str],
+    use_cross_validation: bool = False,
     force_retrain: bool = False,
 ) -> float:
-    # For experimentation (skips loading weights, retrains each time)
-    print(predictor.predict_with_test_split(data_df))
+    # For experimentation (skips loading weights, retrains each time, use one or the other)
+    # predictor.predict_with_test_split(data_df, test_size=0.3)
+    # predictor.cross_validate(data_df, k=5)
 
-    # if force_retrain or not predictor.regressor.load_model(predictor.regressor.path):
-    #     print(
-    #         "No regressor model found or force retrain enabled. Training and saving new model..."
-    #     )
-    #     predictor.train(data_df)
-    #     predictor.regressor.save_model(predictor.regressor.path)
+    if use_cross_validation:
+        predictor.cross_validate(data_df, k=5)
 
-    # predicted_price = predictor.predict_single_painting(painting_data_dict)
+    model_path = get_predictor_regressor_path(predictor)
+    if force_retrain or not predictor.load_model(model_path):
+        print(
+            "No regressor model found or force retrain enabled. Training and saving new model..."
+        )
+        if use_cross_validation:
+            predictor.regressor.clear_fit()
+            predictor.train(data_df)
+        else:
+            predictor.train_with_test_split(data_df, test_size=0.3)
 
-    # return predicted_price
+        predictor.save_model(model_path)
 
-    return -1
+    predicted_price = predictor.predict_single_painting(painting_data_dict)
+
+    return predicted_price
+
+
+def get_predictor_regressor_path(predictor):
+    if isinstance(predictor, PaintingPricePredictor):
+        model_path = predictor.regressor.path
+    elif isinstance(predictor, PaintingPriceEnsemblePredictor):
+        directory = os.path.dirname(predictor.regressors[0].path)
+        regressor_filenames = [
+            os.path.splitext(os.path.basename(regressor.path))[0]
+            for regressor in predictor.regressors
+        ]
+        combined_filename = f"{'_and_'.join(regressor_filenames)}.pkl"
+        model_path = os.path.join(directory, combined_filename)
+    else:
+        raise ValueError("Unsupported predictor type")
+    return model_path
 
 
 if __name__ == "__main__":
@@ -150,7 +175,7 @@ if __name__ == "__main__":
 
         # regressor = KNNRegressor(n_neighbors=5)
         # regressor = RandomForestCustomRegressor(n_estimators=20)
-        # regressor = LightGBMRegressor(n_estimators=500)
+        regressor2 = LightGBMRegressor(n_estimators=500)
         regressor1 = NeuralNetworkRegressor(
             model_class=WideAndDeepModel,
             hidden_units=1024,
@@ -161,11 +186,10 @@ if __name__ == "__main__":
             lr_patience=5,
             lr_factor=0.25,
         )
-        regressor2 = HistogramGradientBoostingRegressor()
+        # regressor = HistogramGradientBoostingRegressor()
 
         predictor = PaintingPriceEnsemblePredictor(
             regressors=[regressor1, regressor2],
-            # meta_regressor=LinearRegression(),
             meta_regressor=MAPEMetaRegressor(),
             max_missing_percent=0.15,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
             use_separate_numeric_features=True,
