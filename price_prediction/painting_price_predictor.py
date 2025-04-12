@@ -77,7 +77,7 @@ class PaintingPricePredictor(BasePredictor):
 
     def train(self, df: pd.DataFrame) -> None:
         self.regressor.clear_fit()
-        df = self.preprocess_data(df)
+        df = self.preprocess_data(df, is_training=True)
         X = self.generate_combined_embeddings(df)
         y = df["Sold Price"].astype(float)
 
@@ -96,7 +96,7 @@ class PaintingPricePredictor(BasePredictor):
         self, df: pd.DataFrame, test_size: float = 0.3
     ) -> pd.DataFrame:
         self.regressor.clear_fit()
-        df = self.preprocess_data(df)
+        df = self.preprocess_data(df, is_training=True)
 
         self.regressor.feature_columns = df.columns.tolist()
         self.regressor.feature_types = df.dtypes.to_dict()
@@ -115,10 +115,8 @@ class PaintingPricePredictor(BasePredictor):
             self.regressor.train(X_train, y_train)
         y_pred = self.regressor.predict(X_test)
 
-        print(f"MAE: {mean_absolute_error(y_test, y_pred)}")
-        print(f"MSE: {mean_squared_error(y_test, y_pred)}")
-        print(f"MAPE: {mean_absolute_percentage_error(y_test, y_pred)}")
-        print(f"R2: {r2_score(y_test, y_pred)}")
+        df_test = df.iloc[y_test.index]
+        self.evaluate_metrics(y_test, y_pred, df_test)
 
         return pd.DataFrame({"Actual": y_test, "Predicted": y_pred})
 
@@ -133,30 +131,25 @@ class PaintingPricePredictor(BasePredictor):
         else:
             raise ValueError("Input row must be a dictionary or a pandas Series")
 
-        processed_df = self.preprocess_data(df_single)
+        processed_df = self.preprocess_data(df_single, is_training=False)
         processed_df = self.filter_prediction_columns(processed_df)
         X = self.generate_combined_embeddings(processed_df)
 
         return self.regressor.predict(X)[0]
 
     def cross_validate(self, df: pd.DataFrame, k: int) -> Dict[str, float]:
-        # Preprocess the data
         df = self.preprocess_data(df)
         X, y = self.generate_combined_embeddings(df), df["Sold Price"].astype(float)
 
-        # Initialize k-fold cross-validation
         kf = KFold(n_splits=k, shuffle=True, random_state=42)
         metrics = []
 
         for train_index, test_index in kf.split(X):
-            # Split data into training and testing sets
             X_train, X_test = X[train_index], X[test_index]
             y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
-            # Clear and train the regressor
             self.regressor.clear_fit()
             if isinstance(self.regressor, NeuralNetworkRegressor):
-                # Split validation set for neural networks
                 X_train_split, X_validation, y_train_split, y_validation = (
                     train_test_split(X_train, y_train, test_size=0.2, random_state=42)
                 )
@@ -166,10 +159,8 @@ class PaintingPricePredictor(BasePredictor):
             else:
                 self.regressor.train(X_train, y_train)
 
-            # Predict on the test set
             y_pred = self.regressor.predict(X_test)
 
-            # Compute metrics for this fold
             fold_metrics = {
                 "MAE": mean_absolute_error(y_test, y_pred),
                 "MSE": mean_squared_error(y_test, y_pred),
@@ -178,13 +169,11 @@ class PaintingPricePredictor(BasePredictor):
             }
             metrics.append(fold_metrics)
 
-        # Compute average metrics across all folds
         avg_metrics = {key: np.mean([m[key] for m in metrics]) for key in metrics[0]}
         print("Cross-Validation Metrics:", avg_metrics)
         return avg_metrics
 
     def filter_prediction_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Verify that the regressor holds the necessary schema.
         if not hasattr(self.regressor, "feature_columns") or not hasattr(
             self.regressor, "feature_types"
         ):
@@ -193,12 +182,10 @@ class PaintingPricePredictor(BasePredictor):
                 "Ensure the model is trained or loaded correctly."
             )
 
-        # Add logging if different training/prediction weights used
         unexpected_columns = set(df.columns) - set(self.regressor.feature_columns)
         if unexpected_columns:
             print(f"Warning: Unexpected columns in input data: {unexpected_columns}")
 
-        # Add missing columns with default values and update additional columns
         for col in self.regressor.feature_columns:
             if col not in df.columns:
                 expected_dtype = self.regressor.feature_types[col]
@@ -211,10 +198,8 @@ class PaintingPricePredictor(BasePredictor):
                     if col not in self.TEXT_COLUMNS:
                         self.additional_text_columns.append(col)
 
-        # Keep only the expected columns and reorder them.
         df = df[self.regressor.feature_columns]
 
-        # Cast each column to its expected type.
         for col in self.regressor.feature_columns:
             df[col] = df[col].astype(self.regressor.feature_types[col])
 

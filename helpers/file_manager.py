@@ -81,7 +81,7 @@ class FileManager:
         return image_dict
 
     @staticmethod
-    def read_single_csv(file_path: str) -> pd.DataFrame:
+    def read_single_csv(file_path: str, separator: str = ";") -> pd.DataFrame:
         """
         Reads a single CSV file and returns a DataFrame.
 
@@ -99,12 +99,12 @@ class FileManager:
             raise FileNotFoundError(f"File not found: {file_path}")
 
         try:
-            return pd.read_csv(file_path, sep=";")
+            return pd.read_csv(file_path, sep=separator)
         except Exception as e:
             raise IOError(f"Error reading CSV file {file_path}: {str(e)}")
 
     @staticmethod
-    def read_all_csvs(root_path: str) -> pd.DataFrame:
+    def read_all_csvs(root_path: str, separator=";") -> pd.DataFrame:
         """
         Reads all CSV files in a directory and combines them into a single DataFrame.
 
@@ -132,7 +132,7 @@ class FileManager:
 
         dataframes = []
         for file in csv_files:
-            dataframes.append(FileManager.read_single_csv(file))
+            dataframes.append(FileManager.read_single_csv(file, separator))
 
         return pd.concat(dataframes, ignore_index=True)
 

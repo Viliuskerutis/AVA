@@ -84,7 +84,7 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
     def train(self, df: pd.DataFrame) -> None:
         for regressor in self.regressors:
             regressor.clear_fit()
-        df = self.preprocess_data(df)
+        df = self.preprocess_data(df, is_training=True)
         X = self.generate_combined_embeddings(df)
         y = df["Sold Price"].astype(float)
 
@@ -108,32 +108,11 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
         self.meta_regressor.fit(meta_features, y)
         print("Meta regressor fitted:", hasattr(self.meta_regressor, "coef_"))
 
-    def predict_single_painting(
-        self, row: Union[Dict[str, Any], pd.Series]
-    ) -> Optional[float]:
-        # Convert input into a single-row DataFrame.
-        if isinstance(row, dict):
-            df_single = pd.DataFrame([row])
-        elif isinstance(row, pd.Series):
-            df_single = row.to_frame().T
-        else:
-            raise ValueError("Input row must be a dictionary or a pandas Series")
-
-        processed_df = self.preprocess_data(df_single)
-        processed_df = self.filter_prediction_columns(processed_df)
-        X = self.generate_combined_embeddings(processed_df)
-        base_predictions = np.column_stack(
-            [regressor.predict(X) for regressor in self.regressors]
-        )
-        return self.meta_regressor.predict(base_predictions)[0]
-
     def train_with_test_split(self, df: pd.DataFrame, test_size: float) -> pd.DataFrame:
         for regressor in self.regressors:
             regressor.clear_fit()
 
-        # Preprocess the data
-        df = self.preprocess_data(df)
-
+        df = self.preprocess_data(df, is_training=True)
         X, y = self.generate_combined_embeddings(df), df["Sold Price"].astype(float)
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=42
@@ -162,34 +141,44 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
 
         y_pred = self.meta_regressor.predict(base_test_preds)
 
-        # Evaluate the model performance
-        print(f"MAE: {mean_absolute_error(y_test, y_pred)}")
-        print(f"MSE: {mean_squared_error(y_test, y_pred)}")
-        print(f"MAPE: {mean_absolute_percentage_error(y_test, y_pred)}")
-        print(f"R2: {r2_score(y_test, y_pred)}")
+        df_test = df.iloc[y_test.index]
+        self.evaluate_metrics(y_test, y_pred, df_test)
 
         # Return the results as a DataFrame
         return pd.DataFrame({"Actual": y_test, "Predicted": y_pred})
 
+    def predict_single_painting(
+        self, row: Union[Dict[str, Any], pd.Series]
+    ) -> Optional[float]:
+        if isinstance(row, dict):
+            df_single = pd.DataFrame([row])
+        elif isinstance(row, pd.Series):
+            df_single = row.to_frame().T
+        else:
+            raise ValueError("Input row must be a dictionary or a pandas Series")
+
+        processed_df = self.preprocess_data(df_single, is_training=False)
+        processed_df = self.filter_prediction_columns(processed_df)
+        X = self.generate_combined_embeddings(processed_df)
+        base_predictions = np.column_stack(
+            [regressor.predict(X) for regressor in self.regressors]
+        )
+        return self.meta_regressor.predict(base_predictions)[0]
+
     def cross_validate(self, df: pd.DataFrame, k: int = 5) -> Dict[str, float]:
-        # Preprocess the data
-        df = self.preprocess_data(df)
+        df = self.preprocess_data(df, is_training=True)
         X, y = self.generate_combined_embeddings(df), df["Sold Price"].astype(float)
 
-        # Initialize k-fold cross-validation
         kf = KFold(n_splits=k, shuffle=True, random_state=42)
         metrics = []
 
         for train_index, test_index in kf.split(X):
-            # Split data into training and testing sets
             X_train, X_test = X[train_index], X[test_index]
             y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
-            # Clear and train base regressors
             for regressor in self.regressors:
                 regressor.clear_fit()
                 if isinstance(regressor, NeuralNetworkRegressor):
-                    # Split validation set for neural networks
                     X_train_split, X_validation, y_train_split, y_validation = (
                         train_test_split(
                             X_train, y_train, test_size=0.2, random_state=42
@@ -201,19 +190,15 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
                 else:
                     regressor.train(X_train, y_train)
 
-            # Generate predictions from base regressors
             base_test_preds = np.column_stack(
                 [regressor.predict(X_test) for regressor in self.regressors]
             )
 
-            # Train meta-regressor if not already fitted
             if not hasattr(self.meta_regressor, "coef_"):
                 self.meta_regressor.fit(base_test_preds, y_test)
 
-            # Predict using the meta-regressor
             y_pred = self.meta_regressor.predict(base_test_preds)
 
-            # Compute metrics for this fold
             fold_metrics = {
                 "MAE": mean_absolute_error(y_test, y_pred),
                 "MSE": mean_squared_error(y_test, y_pred),
@@ -222,13 +207,11 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
             }
             metrics.append(fold_metrics)
 
-        # Compute average metrics across all folds
         avg_metrics = {key: np.mean([m[key] for m in metrics]) for key in metrics[0]}
         print("Cross-Validation Metrics:", avg_metrics)
         return avg_metrics
 
     def filter_prediction_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Verify that the regressor holds the necessary schema.
         if not hasattr(self.regressors[0], "feature_columns") or not hasattr(
             self.regressors[0], "feature_types"
         ):
@@ -237,28 +220,28 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
                 "Ensure the model is trained or loaded correctly."
             )
 
-        # Add logging if different training/prediction weights used
         unexpected_columns = set(df.columns) - set(self.regressors[0].feature_columns)
         if unexpected_columns:
             print(f"Warning: Unexpected columns in input data: {unexpected_columns}")
 
-        # Add missing columns with default values and update additional columns
+        new_columns = {}
         for col in self.regressors[0].feature_columns:
             if col not in df.columns:
                 expected_dtype = self.regressors[0].feature_types[col]
                 if pd.api.types.is_numeric_dtype(expected_dtype):
-                    df[col] = -1
+                    new_columns[col] = -1
                     if col not in self.NUMERIC_COLUMNS:
                         self.additional_numeric_columns.append(col)
                 else:
-                    df[col] = "Unknown"
+                    new_columns[col] = "Unknown"
                     if col not in self.TEXT_COLUMNS:
                         self.additional_text_columns.append(col)
 
-        # Keep only the expected columns and reorder them.
+        if new_columns:
+            df = pd.concat([df, pd.DataFrame(new_columns, index=df.index)], axis=1)
+
         df = df[self.regressors[0].feature_columns]
 
-        # Cast each column to its expected type.
         for col in self.regressors[0].feature_columns:
             df[col] = df[col].astype(self.regressors[0].feature_types[col])
 

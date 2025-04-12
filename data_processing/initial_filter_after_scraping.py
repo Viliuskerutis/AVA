@@ -657,6 +657,28 @@ class InitialAfterScrapingFilter(BaseFilter):
             area = float(width) * float(height)
         return round(area, 2)
 
+    def fill_estimates_from_primary_price(self, row, percentage: float):
+        primary_price = row["Primary Price"]
+        if pd.notna(primary_price) and primary_price != "nan":
+            primary_price = float(primary_price)
+            if (
+                pd.isna(row["Estimated Minimum Price"])
+                or row["Estimated Minimum Price"] == "nan"
+                or row["Estimated Minimum Price"] == "0"
+            ):
+                row["Estimated Minimum Price"] = round(
+                    primary_price * (1 - percentage), 2
+                )
+            if (
+                pd.isna(row["Estimated Maximum Price"])
+                or row["Estimated Maximum Price"] == "nan"
+                or row["Estimated Maximum Price"] == "0"
+            ):
+                row["Estimated Maximum Price"] = round(
+                    primary_price * (1 + percentage), 2
+                )
+        return row
+
     def calculate_min_max_average(self, full_list):
         full_list["Sold Price"] = pd.to_numeric(
             full_list["Sold Price"], errors="coerce"
@@ -861,11 +883,15 @@ class InitialAfterScrapingFilter(BaseFilter):
         df["Area"] = df.apply(
             lambda row: self.get_area(row["Width"], row["Height"]), axis=1
         )
-        # df = df[df["Sold Price"].astype(float) > 0]
 
-        # df = df.drop(columns=['Artist Death Year'])
-        # df = df.drop(columns=['Artist Birth Year'])
-        # df = df.drop(columns=['Creation Year'])
+        df["Primary Price"] = df["Primary Price"].apply(self.delete_euro_sign)
+        df["Primary Price"] = df["Primary Price"].apply(self.replace_comma)
+        df["Primary Price"] = df["Primary Price"].apply(self.replace_non_numeric_to_nan)
+        df = df.apply(
+            lambda row: self.fill_estimates_from_primary_price(row, percentage=0.2),
+            axis=1,
+        )
+
         df = df.drop(columns=["Primary Price"])
         df = df.drop(columns=["Auction Date"])
         df = df.drop(columns=["Auction City Information"])

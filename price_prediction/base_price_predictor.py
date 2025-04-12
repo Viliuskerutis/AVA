@@ -1,12 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import Dict, List
 
 import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import StandardScaler
-
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_absolute_percentage_error,
+    mean_squared_error,
+    r2_score,
+)
 from data_processing.data_filter_pipeline import (
     ensure_data_filled_and_correct,
     process_keep_relevant,
@@ -233,10 +238,14 @@ class BasePredictor(ABC):
 
         return embeddings
 
-    def preprocess_data(self, df: pd.DataFrame) -> pd.DataFrame:
+    def preprocess_data(self, df: pd.DataFrame, is_training: bool) -> pd.DataFrame:
         """
         Applies the full preprocessing pipeline: filling missing data, removing outliers,
         adding images, and enriching with additional data.
+
+        Args:
+            df (pd.DataFrame): The dataset to preprocess.
+            is_training (bool): Whether the preprocessing is for training or prediction.
         """
         # Add image features if enabled
         if self.use_images:
@@ -338,3 +347,113 @@ class BasePredictor(ABC):
 
         df = process_keep_relevant(df, max_missing_percent=self.max_missing_percent)
         return df
+
+    def evaluate_metrics(
+        self,
+        y_true: np.ndarray,
+        y_pred: np.ndarray,
+        df: pd.DataFrame,
+        estimate_error_margin: float = 0.05,
+    ) -> Dict[str, float]:
+        """
+        Calculate and print evaluation metrics, including custom metrics.
+
+        Args:
+            y_true (np.ndarray): Ground truth values.
+            y_pred (np.ndarray): Predicted values.
+            df (pd.DataFrame): DataFrame containing "Estimated Minimum Price" and "Estimated Maximum Price".
+
+        Returns:
+            Dict[str, float]: Dictionary of evaluation metrics.
+        """
+        metrics = {
+            "MAE": mean_absolute_error(y_true, y_pred),
+            "MSE": mean_squared_error(y_true, y_pred),
+            "MAPE": mean_absolute_percentage_error(y_true, y_pred),
+            "R2": r2_score(y_true, y_pred),
+        }
+
+        # Filter out rows where "Estimated Minimum Price" or "Estimated Maximum Price" is 0
+        if (
+            "Estimated Minimum Price" in df.columns
+            and "Estimated Maximum Price" in df.columns
+        ):
+            valid_estimates = (df["Estimated Minimum Price"] > 0) & (
+                df["Estimated Maximum Price"] > 0
+            )
+            filtered_df = df[valid_estimates]
+            filtered_y_pred = y_pred[valid_estimates]
+
+            if not filtered_df.empty:
+                # Expand the range by the error margin
+                expanded_min = filtered_df["Estimated Minimum Price"] * (
+                    1 - estimate_error_margin
+                )
+                expanded_max = filtered_df["Estimated Maximum Price"] * (
+                    1 + estimate_error_margin
+                )
+
+                # Calculate custom metrics
+                within_estimates = (filtered_y_pred >= expanded_min) & (
+                    filtered_y_pred <= expanded_max
+                )
+                metrics["Within_Estimates_Percentage"] = within_estimates.mean() * 100
+
+                above_max = filtered_y_pred > expanded_max
+                metrics["Above_Max_Percentage"] = above_max.mean() * 100
+
+                below_min = filtered_y_pred < expanded_min
+                metrics["Below_Min_Percentage"] = below_min.mean() * 100
+
+                # Calculate percentage error for predictions outside the range
+                outside_range = ~within_estimates
+                percentage_error = np.zeros_like(filtered_y_pred, dtype=float)
+
+                # For predictions below the minimum range
+                percentage_error[filtered_y_pred < expanded_min] = (
+                    (
+                        expanded_min[filtered_y_pred < expanded_min]
+                        - filtered_y_pred[filtered_y_pred < expanded_min]
+                    )
+                    / expanded_min[filtered_y_pred < expanded_min]
+                ) * 100
+
+                # For predictions above the maximum range
+                percentage_error[filtered_y_pred > expanded_max] = (
+                    (
+                        filtered_y_pred[filtered_y_pred > expanded_max]
+                        - expanded_max[filtered_y_pred > expanded_max]
+                    )
+                    / expanded_max[filtered_y_pred > expanded_max]
+                ) * 100
+
+                # Average percentage error for predictions outside the range
+                metrics["Average_Percentage_Error_Outside_Range"] = (
+                    percentage_error[outside_range].mean()
+                    if outside_range.any()
+                    else 0.0
+                )
+
+                # Print custom metrics
+                print(
+                    f"Within Estimates Percentage (with {estimate_error_margin*100:.1f}% margin): {metrics['Within_Estimates_Percentage']:.2f}%"
+                )
+                print(f"Above Max Percentage: {metrics['Above_Max_Percentage']:.2f}%")
+                print(f"Below Min Percentage: {metrics['Below_Min_Percentage']:.2f}%")
+                print(
+                    f"Average Percentage Error Outside Range: {metrics['Average_Percentage_Error_Outside_Range']:.2f}%"
+                )
+            else:
+                print("Warning: No valid rows for custom metric calculation.")
+        else:
+            print(
+                "Warning: 'Estimated Minimum Price' or 'Estimated Maximum Price' columns not found in DataFrame."
+            )
+
+        # Print other metrics
+        print(f"MAE: {metrics['MAE']}")
+        print(f"MSE: {metrics['MSE']}")
+        print(f"MAPE: {metrics['MAPE']}")
+        print(f"R2: {metrics['R2']}")
+
+        return metrics
