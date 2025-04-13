@@ -33,16 +33,18 @@ class NeuralNetworkRegressor(BaseRegressor):
     def __init__(
         self,
         model_class: BaseModel,
+        loss_function=nn.L1Loss(),
         hidden_units=128,
         learning_rate=0.001,
         epochs=100,
         batch_size=32,
-        patience=10,  # Early stopping patience
-        lr_patience=5,  # Learning rate reduction patience
-        lr_factor=0.5,  # Learning rate reduction factor
+        patience=10,
+        lr_patience=5,
+        lr_factor=0.5,
     ):
         super().__init__()
         self.model_class = model_class
+        self.loss_function = loss_function
         self.hidden_units = hidden_units
         self.learning_rate = learning_rate
         self.epochs = epochs
@@ -52,8 +54,7 @@ class NeuralNetworkRegressor(BaseRegressor):
         self.lr_factor = lr_factor
         self.scaler = StandardScaler()
         # self.criterion = nn.L1Loss()  # MAE
-        # self.criterion = nn.MSELoss()
-        self.criterion = MAPELoss()
+        # self.criterion = nn.MSELoss() # MSE
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.path = REGRESSOR_NEURAL_NETWORK_PKL_PATH
@@ -116,7 +117,7 @@ class NeuralNetworkRegressor(BaseRegressor):
             for batch_X, batch_y in train_dataloader:
                 self.optimizer.zero_grad()
                 outputs = self.model(batch_X)
-                loss = self.criterion(outputs, batch_y)
+                loss = self.loss_function(outputs, batch_y)
                 loss.backward()
                 # clip_grad_norm_(self.model.parameters(), max_norm=5.0)
                 self.optimizer.step()  # Update weights
@@ -131,7 +132,7 @@ class NeuralNetworkRegressor(BaseRegressor):
             with torch.no_grad():
                 for batch_X, batch_y in val_dataloader:
                     outputs = self.model(batch_X)
-                    loss = self.criterion(outputs, batch_y)
+                    loss = self.loss_function(outputs, batch_y)
                     val_loss += loss.item()
             val_loss /= len(val_dataloader)
             print(f"Validation Loss: {val_loss:.4f}")

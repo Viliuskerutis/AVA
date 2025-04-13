@@ -33,7 +33,12 @@ from price_prediction.regressors.knn_regressor import KNNRegressor
 from price_prediction.regressors.lightgbm_regressor import LightGBMRegressor
 import pandas as pd
 from price_prediction.regressors.mape_meta_regressor import MAPEMetaRegressor
+from price_prediction.regressors.neural_midpoint_network_regressor import (
+    NeuralMidpointNetworkRegressor,
+)
 from price_prediction.regressors.neural_network.basic_model import BasicModel
+from price_prediction.regressors.neural_network.combined_loss import CombinedLoss
+from price_prediction.regressors.neural_network.mape_loss import MAPELoss
 from price_prediction.regressors.neural_network.residual_model import ResidualModel
 from price_prediction.regressors.neural_network.wide_and_deep_model import (
     WideAndDeepModel,
@@ -45,6 +50,7 @@ from price_prediction.regressors.random_forest_regressor import (
 from price_prediction.painting_price_ensemble_predictor import (
     PaintingPriceEnsemblePredictor,
 )
+from torch import nn
 
 
 def try_find_most_similar(
@@ -178,6 +184,9 @@ if __name__ == "__main__":
         regressor2 = LightGBMRegressor(n_estimators=500)
         regressor1 = NeuralNetworkRegressor(
             model_class=WideAndDeepModel,
+            loss_function=CombinedLoss(
+                MAPELoss(), nn.L1Loss(), alpha=0.9
+            ),  # nn.MSELoss(), nn.L1Loss(),  # MAPELoss(),  #CombinedLoss()
             hidden_units=1024,
             learning_rate=0.001,
             epochs=1000,
@@ -186,6 +195,17 @@ if __name__ == "__main__":
             lr_patience=5,
             lr_factor=0.25,
         )
+        # regressor1 = NeuralMidpointNetworkRegressor(
+        #     model_class=WideAndDeepModel,
+        #     loss_function=MidpointDeviationLoss(),
+        #     hidden_units=1024,
+        #     learning_rate=0.001,
+        #     epochs=1000,
+        #     batch_size=16,
+        #     patience=15,
+        #     lr_patience=5,
+        #     lr_factor=0.25,
+        # )
         # regressor = HistogramGradientBoostingRegressor()
 
         predictor = PaintingPriceEnsemblePredictor(
@@ -211,7 +231,7 @@ if __name__ == "__main__":
             artsy_path=ARTSY_CSV_PATH,
         )
         # predictor = PaintingPricePredictor(
-        #     regressor=regressor,
+        #     regressor=regressor1,
         #     max_missing_percent=0.15,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
         #     use_separate_numeric_features=True,
         #     encode_per_column=False,

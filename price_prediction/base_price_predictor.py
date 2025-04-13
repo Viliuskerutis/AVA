@@ -348,6 +348,14 @@ class BasePredictor(ABC):
         df = process_keep_relevant(df, max_missing_percent=self.max_missing_percent)
         return df
 
+    def calculate_midpoints(self, df: pd.DataFrame) -> pd.Series:
+        midpoints = (df["Estimated Minimum Price"] + df["Estimated Maximum Price"]) / 2
+        midpoints = midpoints.where(
+            (df["Estimated Minimum Price"] > 0) & (df["Estimated Maximum Price"] > 0),
+            df["Sold Price"],
+        )
+        return midpoints
+
     def evaluate_metrics(
         self,
         y_true: np.ndarray,

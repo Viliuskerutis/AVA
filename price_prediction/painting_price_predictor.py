@@ -12,6 +12,9 @@ from helpers.file_manager import FileManager
 from price_prediction.base_price_predictor import BasePredictor
 from price_prediction.embedding_model_type import EmbeddingModelType
 from price_prediction.regressors.base_regressor import BaseRegressor
+from price_prediction.regressors.neural_midpoint_network_regressor import (
+    NeuralMidpointNetworkRegressor,
+)
 from price_prediction.regressors.neural_network_regressor import NeuralNetworkRegressor
 
 
@@ -80,11 +83,29 @@ class PaintingPricePredictor(BasePredictor):
         df = self.preprocess_data(df, is_training=True)
         X = self.generate_combined_embeddings(df)
         y = df["Sold Price"].astype(float)
+        midpoints = self.calculate_midpoints(df)
 
         self.regressor.feature_columns = df.columns.tolist()
         self.regressor.feature_types = df.dtypes.to_dict()
 
-        if isinstance(self.regressor, NeuralNetworkRegressor):
+        if isinstance(self.regressor, NeuralMidpointNetworkRegressor):
+            (
+                X_train,
+                X_validation,
+                y_train,
+                y_validation,
+                midpoints_train,
+                midpoints_validation,
+            ) = train_test_split(X, y, midpoints, test_size=0.2, random_state=42)
+            self.regressor.train(
+                X_train,
+                y_train,
+                X_validation,
+                y_validation,
+                midpoints_train,
+                midpoints_validation,
+            )
+        elif isinstance(self.regressor, NeuralNetworkRegressor):
             X_train, X_validation, y_train, y_validation = train_test_split(
                 X, y, test_size=0.2, random_state=42
             )
@@ -102,11 +123,31 @@ class PaintingPricePredictor(BasePredictor):
         self.regressor.feature_types = df.dtypes.to_dict()
 
         X, y = self.generate_combined_embeddings(df), df["Sold Price"].astype(float)
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=42
+        midpoints = self.calculate_midpoints(df)
+        X_train, X_test, y_train, y_test, midpoints_train, midpoints_test = (
+            train_test_split(X, y, midpoints, test_size=test_size, random_state=42)
         )
 
-        if isinstance(self.regressor, NeuralNetworkRegressor):
+        if isinstance(self.regressor, NeuralMidpointNetworkRegressor):
+            (
+                X_validation,
+                X_test,
+                y_validation,
+                y_test,
+                midpoints_validation,
+                midpoints_test,
+            ) = train_test_split(
+                X_test, y_test, midpoints_test, test_size=0.6, random_state=42
+            )
+            self.regressor.train(
+                X_train,
+                y_train,
+                X_validation,
+                y_validation,
+                midpoints_train,
+                midpoints_validation,
+            )
+        elif isinstance(self.regressor, NeuralNetworkRegressor):
             X_validation, X_test, y_validation, y_test = train_test_split(
                 X_test, y_test, test_size=0.6, random_state=42
             )
