@@ -40,3 +40,7 @@ data/images/*
 
 # Ignore env files
 .env
+
+# Ignore logs
+logs/*
+!logs/*.py

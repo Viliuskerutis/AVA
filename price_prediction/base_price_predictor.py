@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import pandas as pd
 import numpy as np
@@ -19,6 +19,8 @@ from data_processing.data_filter_pipeline import (
 from helpers.file_manager import FileManager
 from helpers.property_modifier import PropertyModifier
 from price_prediction.embedding_model_type import EmbeddingModelType
+import os
+from datetime import datetime
 
 
 class BasePredictor(ABC):
@@ -465,3 +467,52 @@ class BasePredictor(ABC):
         print(f"R2: {metrics['R2']}")
 
         return metrics
+
+    def log_results(
+        self,
+        metrics: Dict[str, float],
+        predictor_info: Dict[str, Any],
+        regressor_names: List[str],
+        df_size: tuple,
+        nn_info: Dict[str, Any] = None,
+        log_dir: str = "logs",
+    ) -> None:
+        """
+        Save metrics, predictor parameters, and regressor information to a CSV log file.
+
+        Args:
+            metrics: Dictionary of evaluation metrics (MAE, MSE, MAPE, R2)
+            predictor_info: Dictionary of predictor parameters
+            regressor_names: List of regressor names used
+            df_size: Tuple containing (rows, columns) of the preprocessed DataFrame
+            nn_info: Dictionary with neural network specific information (model_class, loss_function, hidden_units)
+            log_dir: Directory to save log files
+        """
+        os.makedirs(log_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_path = os.path.join(log_dir, f"training_log_{timestamp}.csv")
+
+        log_data = {
+            "Regressors": ";".join(regressor_names),
+            "Data Rows": df_size[0],
+            "Used Data Columns count": df_size[1],
+        }
+
+        if nn_info:
+            log_data["ModelClass"] = nn_info.get("model_class", "")
+            log_data["LossFunction"] = nn_info.get("loss_function", "")
+            log_data["HiddenUnits"] = nn_info.get("hidden_units", "")
+        else:
+            log_data["ModelClass"] = ""
+            log_data["LossFunction"] = ""
+            log_data["HiddenUnits"] = ""
+
+        log_data.update(metrics)
+
+        for key, value in predictor_info.items():
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                log_data[f"predictor_{key}"] = value
+
+        pd.DataFrame([log_data]).to_csv(log_path, index=False)
+        print(f"Training results logged to {log_path}")

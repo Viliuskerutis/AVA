@@ -128,22 +128,40 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
         self.meta_regressor.fit(meta_features, y)
         print("Meta regressor fitted:", hasattr(self.meta_regressor, "coef_"))
 
-    def train_with_test_split(self, df: pd.DataFrame, test_size: float) -> pd.DataFrame:
+    def train_with_test_split(
+        self, df: pd.DataFrame, test_size: float, log_results: bool = True
+    ) -> pd.DataFrame:
         for regressor in self.regressors:
             regressor.clear_fit()
 
-        df = self.preprocess_data(df, is_training=True)
-        X, y = self.generate_combined_embeddings(df), df["Sold Price"].astype(float)
-        midpoints = self.calculate_midpoints(df)
+        processed_df = self.preprocess_data(df, is_training=True)
+        X, y = self.generate_combined_embeddings(processed_df), processed_df[
+            "Sold Price"
+        ].astype(float)
+        midpoints = self.calculate_midpoints(processed_df)
         X_train, X_test, y_train, y_test, midpoints_train, midpoints_test = (
             train_test_split(X, y, midpoints, test_size=test_size, random_state=42)
         )
 
+        nn_info = None
         for regressor in self.regressors:
-            regressor.feature_columns = df.columns.tolist()
-            regressor.feature_types = df.dtypes.to_dict()
+            regressor.feature_columns = processed_df.columns.tolist()
+            regressor.feature_types = processed_df.dtypes.to_dict()
 
             if isinstance(regressor, NeuralMidpointNetworkRegressor):
+                if nn_info is None:
+                    nn_info = {
+                        "model_class": regressor.model_class.__name__,
+                        "loss_function": regressor.loss_function.__class__.__name__,
+                        "hidden_units": regressor.hidden_units,
+                    }
+                else:
+                    nn_info["model_class"] += regressor.model_class.__name__ + ";"
+                    nn_info["loss_function"] += (
+                        regressor.loss_function.__class__.__name__ + ";"
+                    )
+                    nn_info["hidden_units"] += regressor.hidden_units + ";"
+
                 (
                     X_validation,
                     X_test,
@@ -164,6 +182,19 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
                     midpoints_validation,
                 )
             elif isinstance(regressor, NeuralNetworkRegressor):
+                if nn_info is None:
+                    nn_info = {
+                        "model_class": regressor.model_class.__name__,
+                        "loss_function": regressor.loss_function.__class__.__name__,
+                        "hidden_units": regressor.hidden_units,
+                    }
+                else:
+                    nn_info["model_class"] += regressor.model_class.__name__ + ";"
+                    nn_info["loss_function"] += (
+                        regressor.loss_function.__class__.__name__ + ";"
+                    )
+                    nn_info["hidden_units"] += regressor.hidden_units + ";"
+
                 X_validation, X_test, y_validation, y_test = train_test_split(
                     X_test, y_test, test_size=0.6, random_state=42
                 )
@@ -180,8 +211,59 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
 
         y_pred = self.meta_regressor.predict(y_pred)
 
-        df_test = df.iloc[y_test.index]
-        self.evaluate_metrics(y_test, y_pred, df_test)
+        df_test = processed_df.iloc[y_test.index]
+        metrics = self.evaluate_metrics(y_test, y_pred, df_test)
+
+        if log_results:
+            text_columns = self.TEXT_COLUMNS + self.additional_text_columns
+            numeric_columns = self.NUMERIC_COLUMNS + self.additional_numeric_columns
+
+            # if self.use_images:
+            #     numeric_columns += [
+            #         f"Image_Feature_{i+1}" for i in range(self.use_images)
+            #     ]
+
+            used_columns_count = len(text_columns) + len(numeric_columns)
+
+            text_columns_str = ";".join(text_columns)
+            numeric_columns_str = ";".join(numeric_columns)
+
+            df_size = (len(processed_df), used_columns_count)
+
+            regressor_names = [
+                regressor.__class__.__name__ for regressor in self.regressors
+            ]
+
+            predictor_info = {
+                "text_columns": text_columns_str,
+                "numeric_columns": numeric_columns_str,
+                "max_missing_percent": self.max_missing_percent,
+                "use_separate_numeric_features": self.use_separate_numeric_features,
+                "encode_per_column": self.encode_per_column,
+                "hot_encode_columns": (
+                    ";".join(self.hot_encode_columns) if self.hot_encode_columns else ""
+                ),
+                "use_artfacts": self.use_artfacts,
+                "use_images": self.use_images,
+                "use_count": self.use_count,
+                "use_synthetic": self.use_synthetic,
+                "use_artsy": self.use_artsy,
+                "embedding_model_type": (
+                    self.embedding_model_type.name
+                    if hasattr(self.embedding_model_type, "name")
+                    else str(self.embedding_model_type)
+                ),
+                "test_size": test_size,
+                "meta_regressor": self.meta_regressor.__class__.__name__,
+            }
+
+            self.log_results(
+                metrics,
+                predictor_info,
+                regressor_names,
+                df_size,
+                nn_info if nn_info else None,
+            )
 
         return pd.DataFrame({"Actual": y_test, "Predicted": y_pred})
 
