@@ -28,7 +28,8 @@ AUCTION_HOUSE_SYNTHETIC_CSV_PATH = (
     f"{ADDITIONAL_DATA_PATH}/auction_houses_gpt4omini.csv"
 )
 ARTSY_CSV_PATH = f"{ADDITIONAL_DATA_PATH}/artsy_artists.csv"
-FILTERED_COMBINED_DATA_PATH = f"{ADDITIONAL_DATA_PATH}/artfacts_and_synthetic.csv"
+PROCESSED_DATA_PATH = f"{ADDITIONAL_DATA_PATH}/processed_data_default.csv"
+PROCESSED_COMBINED_DATA_PATH = f"{ADDITIONAL_DATA_PATH}/processed_combined_data.csv"
 
 # Fitted model weight paths
 REGRESSOR_HISTOGRAM_GRADIENT_BOOSTING_PKL_PATH = (
@@ -39,3 +40,5 @@ REGRESSOR_LIGHTGBM_PKL_PATH = f"{DATA_PATH}/lightgbm.pkl"
 REGRESSOR_NEURAL_NETWORK_PKL_PATH = f"{DATA_PATH}/neural_network.pkl"
 REGRESSOR_RANDOM_FOREST_PKL_PATH = f"{DATA_PATH}/random_forest.pkl"
 REGRESSOR_NEURAL_MIDPOINT_NETWORK_PKL_PATH = f"{DATA_PATH}/neural_midpoint_network.pkl"
+REGRESSOR_WEIGHTED_KNN_PKL_PATH = f"{DATA_PATH}/weighted_knn.pkl"
+REGRESSOR_DECISION_TREE_PKL_PATH = f"{DATA_PATH}/decision_tree.pkl"
