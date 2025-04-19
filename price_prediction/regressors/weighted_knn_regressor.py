@@ -16,7 +16,7 @@ class WeightedKNNRegressor(BaseRegressor):
             weights=weights,  # Use 'distance' for weighted predictions
             **kwargs
         )
-        self.path = REGRESSOR_KNN_PKL_PATH.replace(".pkl", "_weighted.pkl")
+        self.path = REGRESSOR_KNN_PKL_PATH
 
     def clear_fit(self):
         self.model = KNeighborsRegressor(**self.params)

@@ -76,7 +76,6 @@ class EnsureDataFilledAndCorrectFilter(BaseFilter):
         those that represent booleans are converted to booleans, and the rest remain as text.
         """
         # Replace "nan" strings with actual NaN values for proper conversion.
-
         df = df.replace("", np.nan)
         df = df.replace("nan", np.nan)
 
@@ -88,13 +87,13 @@ class EnsureDataFilledAndCorrectFilter(BaseFilter):
             # Check for boolean columns: if all non-null values are 'true'/'false' (case insensitive)
             unique_vals = df[col].dropna().unique()
             lower_vals = {str(val).strip().lower() for val in unique_vals}
-            if lower_vals.issubset({"true", "false"}) and lower_vals:
+            if lower_vals.issubset({"true", "false", "unknown"}) and lower_vals:
                 df[col] = (
                     df[col]
                     .astype(str)
                     .str.strip()
                     .str.lower()
-                    .map({"true": True, "false": False})
+                    .map({"true": True, "false": False, "unknown": False})
                 )
                 continue
 
@@ -468,13 +467,13 @@ class InitialCleanupFilter(BaseFilter):
             # Check for boolean columns: if all non-null values are 'true'/'false' (case insensitive)
             unique_vals = df[col].dropna().unique()
             lower_vals = {str(val).strip().lower() for val in unique_vals}
-            if lower_vals.issubset({"true", "false"}) and lower_vals:
+            if lower_vals.issubset({"true", "false", "unknown"}) and lower_vals:
                 df[col] = (
                     df[col]
                     .astype(str)
                     .str.strip()
                     .str.lower()
-                    .map({"true": True, "false": False})
+                    .map({"true": True, "false": False, "unknown": False})
                 )
                 continue
 
