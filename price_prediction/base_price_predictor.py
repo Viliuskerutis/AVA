@@ -347,7 +347,8 @@ class BasePredictor(ABC):
                 else:
                     print(f"Warning: Column '{col}' not found in DataFrame.")
 
-        df = process_keep_relevant(df, max_missing_percent=self.max_missing_percent)
+        if is_training:
+            df = process_keep_relevant(df, max_missing_percent=self.max_missing_percent)
         return df
 
     def calculate_midpoints(self, df: pd.DataFrame) -> pd.Series:

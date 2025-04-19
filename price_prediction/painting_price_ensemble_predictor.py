@@ -13,6 +13,7 @@ from helpers.file_manager import FileManager
 from price_prediction.base_price_predictor import BasePredictor
 from price_prediction.embedding_model_type import EmbeddingModelType
 from price_prediction.regressors.base_regressor import BaseRegressor
+from price_prediction.regressors.densenet_regressor import DenseNetRegressor
 from price_prediction.regressors.neural_midpoint_network_regressor import (
     NeuralMidpointNetworkRegressor,
 )
@@ -113,7 +114,9 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
                     midpoints_train,
                     midpoints_validation,
                 )
-            elif isinstance(regressor, NeuralNetworkRegressor):
+            elif isinstance(regressor, NeuralNetworkRegressor) or isinstance(
+                regressor, DenseNetRegressor
+            ):
                 X_train, X_validation, y_train, y_validation = train_test_split(
                     X, y, test_size=0.2, random_state=42
                 )
@@ -156,11 +159,13 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
                         "hidden_units": regressor.hidden_units,
                     }
                 else:
-                    nn_info["model_class"] += regressor.model_class.__name__ + ";"
-                    nn_info["loss_function"] += (
-                        regressor.loss_function.__class__.__name__ + ";"
+                    nn_info["model_class"] += ";" + regressor.model_class.__name__
+                    nn_info["loss_function"] += ";" + (
+                        regressor.loss_function.__class__.__name__
                     )
-                    nn_info["hidden_units"] += regressor.hidden_units + ";"
+                    nn_info["hidden_units"] = (
+                        nn_info["hidden_units"] + ";" + regressor.hidden_units
+                    )
 
                 (
                     X_validation,
@@ -181,7 +186,9 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
                     midpoints_train,
                     midpoints_validation,
                 )
-            elif isinstance(regressor, NeuralNetworkRegressor):
+            elif isinstance(regressor, NeuralNetworkRegressor) or isinstance(
+                regressor, DenseNetRegressor
+            ):
                 if nn_info is None:
                     nn_info = {
                         "model_class": regressor.model_class.__name__,
@@ -189,11 +196,13 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
                         "hidden_units": regressor.hidden_units,
                     }
                 else:
-                    nn_info["model_class"] += regressor.model_class.__name__ + ";"
-                    nn_info["loss_function"] += (
-                        regressor.loss_function.__class__.__name__ + ";"
+                    nn_info["model_class"] += ";" + regressor.model_class.__name__
+                    nn_info["loss_function"] += ";" + (
+                        regressor.loss_function.__class__.__name__
                     )
-                    nn_info["hidden_units"] += regressor.hidden_units + ";"
+                    nn_info["hidden_units"] = (
+                        nn_info["hidden_units"] + ";" + regressor.hidden_units
+                    )
 
                 X_validation, X_test, y_validation, y_test = train_test_split(
                     X_test, y_test, test_size=0.6, random_state=42

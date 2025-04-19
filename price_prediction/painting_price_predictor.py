@@ -12,6 +12,7 @@ from helpers.file_manager import FileManager
 from price_prediction.base_price_predictor import BasePredictor
 from price_prediction.embedding_model_type import EmbeddingModelType
 from price_prediction.regressors.base_regressor import BaseRegressor
+from price_prediction.regressors.densenet_regressor import DenseNetRegressor
 from price_prediction.regressors.neural_midpoint_network_regressor import (
     NeuralMidpointNetworkRegressor,
 )
@@ -105,7 +106,9 @@ class PaintingPricePredictor(BasePredictor):
                 midpoints_train,
                 midpoints_validation,
             )
-        elif isinstance(self.regressor, NeuralNetworkRegressor):
+        elif isinstance(self.regressor, NeuralNetworkRegressor) or isinstance(
+            self.regressor, DenseNetRegressor
+        ):
             X_train, X_validation, y_train, y_validation = train_test_split(
                 X, y, test_size=0.2, random_state=42
             )
@@ -156,7 +159,9 @@ class PaintingPricePredictor(BasePredictor):
                 midpoints_train,
                 midpoints_validation,
             )
-        elif isinstance(self.regressor, NeuralNetworkRegressor):
+        elif isinstance(self.regressor, NeuralNetworkRegressor) or isinstance(
+            self.regressor, DenseNetRegressor
+        ):
             nn_info = {
                 "model_class": self.regressor.model_class.__name__,
                 "loss_function": self.regressor.loss_function.__class__.__name__,

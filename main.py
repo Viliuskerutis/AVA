@@ -26,6 +26,7 @@ from image_similarity.similarity_checker import SimilarityChecker
 from helpers.file_manager import FileManager
 from price_prediction.embedding_model_type import EmbeddingModelType
 from price_prediction.painting_price_predictor import PaintingPricePredictor
+from price_prediction.regressors.densenet_regressor import DenseNetRegressor
 from price_prediction.regressors.histogram_gradient_boosting_regressor import (
     HistogramGradientBoostingRegressor,
 )
@@ -51,6 +52,8 @@ from price_prediction.painting_price_ensemble_predictor import (
     PaintingPriceEnsemblePredictor,
 )
 from torch import nn
+
+from price_prediction.regressors.weighted_knn_regressor import WeightedKNNRegressor
 
 
 def try_find_most_similar(
@@ -207,6 +210,18 @@ if __name__ == "__main__":
         #     lr_factor=0.25,
         # )
         # regressor = HistogramGradientBoostingRegressor()
+        regressor = DenseNetRegressor(
+            loss_function=nn.L1Loss(),
+            learning_rate=0.001,
+            epochs=1000,
+            batch_size=32,
+            patience=8,
+            lr_patience=3,
+            lr_factor=0.25,
+        )
+        regressor1 = WeightedKNNRegressor(
+            n_neighbors=7, weights="distance", algorithm="auto", p=2
+        )
 
         predictor = PaintingPriceEnsemblePredictor(
             regressors=[regressor1, regressor2],
@@ -261,7 +276,7 @@ if __name__ == "__main__":
             predictor,
             data_for_prediction_df,
             random_painting_data,
-            force_retrain=False,
+            force_retrain=True,
         )
 
         print(f'Random Painting Sold Price: {random_painting_data["Sold Price"]}')
