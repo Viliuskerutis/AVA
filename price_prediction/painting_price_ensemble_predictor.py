@@ -131,6 +131,85 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
         self.meta_regressor.fit(meta_features, y)
         print("Meta regressor fitted:", hasattr(self.meta_regressor, "coef_"))
 
+    def train_with_same_data(
+        self, df: pd.DataFrame, log_results: bool = True
+    ) -> pd.DataFrame:
+        for regressor in self.regressors:
+            regressor.clear_fit()
+
+        processed_df = self.preprocess_data(df, is_training=True)
+
+        for regressor in self.regressors:
+            regressor.feature_columns = processed_df.columns.tolist()
+            regressor.feature_types = processed_df.dtypes.to_dict()
+
+        X, y = self.generate_combined_embeddings(processed_df), processed_df[
+            "Sold Price"
+        ].astype(float)
+
+        for regressor in self.regressors:
+            regressor.train(X, y)
+
+        base_predictions = np.column_stack(
+            [regressor.predict(X) for regressor in self.regressors]
+        )
+
+        if not hasattr(self.meta_regressor, "coef_"):
+            self.meta_regressor.fit(base_predictions, y)
+            print("Meta regressor has been fitted.")
+
+        y_pred = self.meta_regressor.predict(base_predictions)
+
+        metrics = self.evaluate_metrics(y, y_pred, processed_df)
+
+        if log_results:
+            text_columns = self.TEXT_COLUMNS + self.additional_text_columns
+            numeric_columns = self.NUMERIC_COLUMNS + self.additional_numeric_columns
+
+            used_columns_count = len(text_columns) + len(numeric_columns)
+
+            text_columns_str = ";".join(text_columns)
+            numeric_columns_str = ";".join(numeric_columns)
+
+            df_size = (len(processed_df), used_columns_count)
+
+            regressor_names = [
+                regressor.__class__.__name__ for regressor in self.regressors
+            ]
+
+            predictor_info = {
+                "text_columns": text_columns_str,
+                "numeric_columns": numeric_columns_str,
+                "max_missing_percent": self.max_missing_percent,
+                "use_separate_numeric_features": self.use_separate_numeric_features,
+                "encode_per_column": self.encode_per_column,
+                "hot_encode_columns": (
+                    ";".join(self.hot_encode_columns) if self.hot_encode_columns else ""
+                ),
+                "use_artfacts": self.use_artfacts,
+                "use_images": self.use_images,
+                "use_count": self.use_count,
+                "use_synthetic": self.use_synthetic,
+                "use_artsy": self.use_artsy,
+                "embedding_model_type": (
+                    self.embedding_model_type.name
+                    if hasattr(self.embedding_model_type, "name")
+                    else str(self.embedding_model_type)
+                ),
+                "test_size": 0.0,  # No test split
+                "meta_regressor": self.meta_regressor.__class__.__name__,
+            }
+
+            self.log_results(
+                metrics,
+                predictor_info,
+                regressor_names,
+                df_size,
+                None,
+            )
+
+        return pd.DataFrame({"Actual": y, "Predicted": y_pred})
+
     def train_with_test_split(
         self, df: pd.DataFrame, test_size: float, log_results: bool = True
     ) -> pd.DataFrame:
@@ -293,6 +372,25 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
             [regressor.predict(X) for regressor in self.regressors]
         )
         return self.meta_regressor.predict(base_predictions)[0]
+
+    def predict_random_paintings(self, df: pd.DataFrame, count: int):
+        processed_df = self.preprocess_data(df, is_training=True)
+
+        X, y = self.generate_combined_embeddings(processed_df), processed_df[
+            "Sold Price"
+        ].astype(float)
+
+        np.random.seed(42)
+        random_indexes = np.random.randint(0, len(X), size=count)
+        for index in random_indexes:
+            X_random = X[index].reshape(1, -1)
+            y_random = y.iloc[index]
+
+            y_pred = np.column_stack(
+                [regressor.predict(X_random) for regressor in self.regressors]
+            )
+            y_pred = self.meta_regressor.predict(y_pred)[0]
+            print(f"Actual: {y_random}, Predicted: {y_pred}")
 
     def cross_validate(self, df: pd.DataFrame, k: int = 5) -> Dict[str, float]:
         df = self.preprocess_data(df, is_training=True)

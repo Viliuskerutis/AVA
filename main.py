@@ -52,7 +52,9 @@ from price_prediction.painting_price_ensemble_predictor import (
     PaintingPriceEnsemblePredictor,
 )
 from torch import nn
-
+from price_prediction.regressors.decision_tree_custom_regressor import (
+    DecisionTreeCustomRegressor,
+)
 from price_prediction.regressors.weighted_knn_regressor import WeightedKNNRegressor
 
 
@@ -97,11 +99,13 @@ def predict_price(
     data_df: pd.DataFrame,
     painting_data_dict: Dict[str, str],
     use_cross_validation: bool = False,
+    use_test_split: bool = True,
     force_retrain: bool = False,
 ) -> float:
     # For experimentation (skips loading weights, retrains each time, use one or the other)
     # predictor.predict_with_test_split(data_df, test_size=0.3)
     # predictor.cross_validate(data_df, k=5)
+    # predictor.train_with_same_data(data_df)
 
     if use_cross_validation:
         predictor.cross_validate(data_df, k=5)
@@ -115,11 +119,18 @@ def predict_price(
             predictor.regressor.clear_fit()
             predictor.train(data_df)
         else:
-            predictor.train_with_test_split(data_df, test_size=0.3)
+            if use_test_split:
+                predictor.train_with_test_split(data_df, test_size=0.3)
+            else:
+                predictor.train_with_same_data(data_df)
 
         predictor.save_model(model_path)
 
-    predicted_price = predictor.predict_single_painting(painting_data_dict)
+    predicted_price = predictor.predict_random_paintings(data_df, count=100)
+
+    # predicted_price = predictor.predict_single_painting(painting_data_dict)
+    # print(f'Random Painting Sold Price: {painting_data_dict["Sold Price"]}')
+    # print(f"Predicted Sold Price: {predicted_price:.2f}")
 
     return predicted_price
 
@@ -210,18 +221,19 @@ if __name__ == "__main__":
         #     lr_factor=0.25,
         # )
         # regressor = HistogramGradientBoostingRegressor()
-        regressor = DenseNetRegressor(
-            loss_function=nn.L1Loss(),
-            learning_rate=0.001,
-            epochs=1000,
-            batch_size=32,
-            patience=8,
-            lr_patience=3,
-            lr_factor=0.25,
-        )
-        regressor1 = WeightedKNNRegressor(
-            n_neighbors=7, weights="distance", algorithm="auto", p=2
-        )
+        # regressor = DenseNetRegressor(
+        #     loss_function=nn.L1Loss(),
+        #     learning_rate=0.001,
+        #     epochs=1000,
+        #     batch_size=32,
+        #     patience=8,
+        #     lr_patience=3,
+        #     lr_factor=0.25,
+        # )
+        # regressor1 = WeightedKNNRegressor(
+        #     n_neighbors=7, weights="distance", algorithm="auto", p=2
+        # )
+        # regressor = DecisionTreeCustomRegressor(max_depth=20)
 
         predictor = PaintingPriceEnsemblePredictor(
             regressors=[regressor1, regressor2],
@@ -246,14 +258,14 @@ if __name__ == "__main__":
             artsy_path=ARTSY_CSV_PATH,
         )
         # predictor = PaintingPricePredictor(
-        #     regressor=regressor1,
+        #     regressor=regressor,
         #     max_missing_percent=0.15,  # Set to 1.0 to keep missing data filled with "Unknown" and -1
         #     use_separate_numeric_features=True,
         #     encode_per_column=False,
         #     hot_encode_columns=["Surface", "Materials"],
         #     use_artfacts=False,
         #     use_images=50,
-        #     use_count=True,
+        #     use_count=False,
         #     use_synthetic=True,
         #     use_artsy=False,
         #     embedding_model_type=EmbeddingModelType.ALL_MPNET_BASE,
@@ -267,7 +279,19 @@ if __name__ == "__main__":
         #     artsy_path=ARTSY_CSV_PATH,
         # )
 
+        # for i in range(0, 50):
+        #     random_painting_data = (
+        #         data_for_prediction_df.sample(n=1, random_state=i).iloc[0].to_dict()
+        #     )
+        #     predicted_price = predict_price(
+        #         predictor,
+        #         data_for_prediction_df,
+        #         random_painting_data,
+        #         force_retrain=True,
+        #     )
+
         # This should be the user painting information from UI (temporarily picking random value)
+        # preprocessed_df = predictor.preprocess_data(data_for_prediction_df, True)
         random_painting_data = (
             data_for_prediction_df.sample(n=1, random_state=21).iloc[0].to_dict()
         )
@@ -276,8 +300,6 @@ if __name__ == "__main__":
             predictor,
             data_for_prediction_df,
             random_painting_data,
+            use_test_split=True,
             force_retrain=True,
         )
-
-        print(f'Random Painting Sold Price: {random_painting_data["Sold Price"]}')
-        print(f"Predicted Sold Price: {predicted_price:.2f}")

@@ -21,6 +21,8 @@ from helpers.property_modifier import PropertyModifier
 from price_prediction.embedding_model_type import EmbeddingModelType
 import os
 from datetime import datetime
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 class BasePredictor(ABC):
@@ -122,6 +124,16 @@ class BasePredictor(ABC):
         pass
 
     @abstractmethod
+    def train_with_same_data(self, df) -> None:
+        """
+        Train the predictor using the same dataset.
+
+        Args:
+            df (pd.DataFrame): The dataset to train the predictor on.
+        """
+        pass
+
+    @abstractmethod
     def train_with_test_split(self, df, test_size: float) -> None:
         """
         Train the predictor using a train-test split.
@@ -142,6 +154,20 @@ class BasePredictor(ABC):
 
         Returns:
             float: The predicted price of the painting.
+        """
+        pass
+
+    @abstractmethod
+    def predict_random_paintings(self, df: pd.DataFrame, count: int):
+        """
+        Predict the price of a random subset of paintings from the dataset.
+
+        Args:
+            df (pd.DataFrame): The dataset to use for predictions.
+            count (int): Number of random paintings to predict.
+
+        Returns:
+            pd.DataFrame: DataFrame containing the predicted prices.
         """
         pass
 
@@ -392,10 +418,80 @@ class BasePredictor(ABC):
             valid_estimates = (df["Estimated Minimum Price"] > 0) & (
                 df["Estimated Maximum Price"] > 0
             )
-            filtered_df = df[valid_estimates]
+            filtered_df = df[valid_estimates].copy()
             filtered_y_pred = y_pred[valid_estimates]
+            filtered_y_true = y_true[valid_estimates]
 
             if not filtered_df.empty:
+                estimated_min = filtered_df["Estimated Minimum Price"]
+                estimated_max = filtered_df["Estimated Maximum Price"]
+
+                # Calculate "Within Estimates" for actual and predicted prices
+                within_estimates_actual = (filtered_y_true >= estimated_min) & (
+                    filtered_y_true <= estimated_max
+                )
+                within_estimates_predicted = (filtered_y_pred >= estimated_min) & (
+                    filtered_y_pred <= estimated_max
+                )
+
+                # Add "Within Estimates" as columns to the DataFrame
+                filtered_df.loc[:, "Within Estimates Actual"] = within_estimates_actual
+                filtered_df.loc[:, "Within Estimates Predicted"] = (
+                    within_estimates_predicted
+                )
+
+                # Add price ranges
+                bins = [0, 100, 1000, 2000, 5000]
+                labels = ["Low", "Medium", "High", "Very High"]
+                filtered_df.loc[:, "Price Range"] = pd.cut(
+                    filtered_y_true,
+                    bins=bins,
+                    labels=labels,
+                )
+
+                # Calculate percentages for each price range
+                actual_within_percent = (
+                    filtered_df.groupby("Price Range", observed=True)[
+                        "Within Estimates Actual"
+                    ].mean()
+                    * 100
+                )
+                predicted_within_percent = (
+                    filtered_df.groupby("Price Range", observed=True)[
+                        "Within Estimates Predicted"
+                    ].mean()
+                    * 100
+                )
+
+                # Calculate deviations for actual and predicted prices
+                actual_deviation = np.where(
+                    filtered_y_true < estimated_min,
+                    estimated_min - filtered_y_true,
+                    np.where(
+                        filtered_y_true > estimated_max,
+                        filtered_y_true - estimated_max,
+                        0,
+                    ),
+                )
+                predicted_deviation = np.where(
+                    filtered_y_pred < estimated_min,
+                    estimated_min - filtered_y_pred,
+                    np.where(
+                        filtered_y_pred > estimated_max,
+                        filtered_y_pred - estimated_max,
+                        0,
+                    ),
+                )
+
+                # Add deviations to the DataFrame
+                filtered_df.loc[:, "Actual Deviation"] = actual_deviation
+                filtered_df.loc[:, "Predicted Deviation"] = predicted_deviation
+
+                # Group by price range and calculate mean deviations
+                mean_deviation = filtered_df.groupby("Price Range", observed=True)[
+                    ["Actual Deviation", "Predicted Deviation"]
+                ].mean()
+
                 # Expand the range by the error margin
                 expanded_min = filtered_df["Estimated Minimum Price"] * (
                     1 - estimate_error_margin
@@ -445,9 +541,29 @@ class BasePredictor(ABC):
                     else 0.0
                 )
 
+                # Calculate "Within Estimates with 0% Error" for predictions
+                within_exact_estimates = (
+                    filtered_y_pred >= filtered_df["Estimated Minimum Price"]
+                ) & (filtered_y_pred <= filtered_df["Estimated Maximum Price"])
+                metrics["Within_Exact_Estimates_Percentage"] = (
+                    within_exact_estimates.mean() * 100
+                )
+
+                # Calculate "Within Estimates with 0% Error" for actual sold prices
+                within_exact_sold_prices = (
+                    filtered_y_true >= filtered_df["Estimated Minimum Price"]
+                ) & (filtered_y_true <= filtered_df["Estimated Maximum Price"])
+                metrics["Sold_Price_Within_Exact_Estimates_Percentage"] = (
+                    within_exact_sold_prices.mean() * 100
+                )
+
                 # Print custom metrics
                 print(
                     f"Within Estimates Percentage (with {estimate_error_margin*100:.1f}% margin): {metrics['Within_Estimates_Percentage']:.2f}%"
+                )
+                print(
+                    f"Within Exact Estimates Percentage: {metrics['Within_Exact_Estimates_Percentage']:.2f}% "
+                    f"({metrics['Sold_Price_Within_Exact_Estimates_Percentage']:.2f}% for actual Sold Price)"
                 )
                 print(f"Above Max Percentage: {metrics['Above_Max_Percentage']:.2f}%")
                 print(f"Below Min Percentage: {metrics['Below_Min_Percentage']:.2f}%")
@@ -466,6 +582,8 @@ class BasePredictor(ABC):
         print(f"MSE: {metrics['MSE']}")
         print(f"MAPE: {metrics['MAPE']}")
         print(f"R2: {metrics['R2']}")
+
+        self.create_evaluation_plots(y_true, y_pred, df, metrics, tolerance=0.2)
 
         return metrics
 
@@ -517,3 +635,266 @@ class BasePredictor(ABC):
 
         pd.DataFrame([log_data]).to_csv(log_path, index=False)
         print(f"Training results logged to {log_path}")
+
+    def create_evaluation_plots(
+        self,
+        y_true: np.ndarray,
+        y_pred: np.ndarray,
+        df: pd.DataFrame,
+        metrics: Dict[str, float],
+        tolerance: float = 0.1,
+    ) -> None:
+        """
+        Creates a single plot containing multiple evaluation graphs:
+        1. Scatter plot of actual vs. predicted prices.
+        2. Error distribution by price range.
+        3. Cumulative error plot.
+        4. Price range accuracy bar chart.
+        5. Within Estimates Plot (Predicted vs. Actual vs. Estimated Ranges).
+
+        Args:
+            y_true (np.ndarray): Ground truth values.
+            y_pred (np.ndarray): Predicted values.
+            df (pd.DataFrame): DataFrame containing the actual prices and other metadata.
+            metrics (Dict[str, float]): Precomputed metrics dictionary.
+            tolerance (float): Tolerance for the price range accuracy bar chart.
+        """
+        # Prepare data
+        bins = [0, 100, 1000, 2000, 5000]
+        labels = [
+            "Low",
+            "Medium",
+            "High",
+            "Very High",
+        ]
+
+        df_plot = pd.DataFrame({"Actual": y_true, "Predicted": y_pred})
+        df_plot["Price Range"] = pd.cut(
+            df_plot["Actual"],
+            bins=bins,
+            labels=labels,
+        )
+
+        # Create subplots (3 horizontal, 2 vertical)
+        fig, axes = plt.subplots(3, 2, figsize=(18, 16))
+        fig.suptitle("Evaluation Plots", fontsize=18)
+
+        # Add a legend at the top for price ranges using a dummy plot
+        handles = [
+            plt.Line2D(
+                [0], [0], color="none", label=f"{label}: {bins[i]} - {bins[i + 1]}"
+            )
+            for i, label in enumerate(labels)
+        ]
+        fig.legend(
+            handles=handles,
+            loc="upper center",
+            fontsize=10,
+            title="Price Ranges",
+            ncol=len(labels),
+            frameon=True,
+            bbox_to_anchor=(0.5, 0.95),
+        )
+
+        # 1. Scatter Plot of Actual vs. Predicted Prices
+        axes[0, 0].scatter(
+            df_plot["Actual"],
+            df_plot["Predicted"],
+            alpha=0.6,
+            c=abs(y_true - y_pred),  # Use precomputed absolute error
+            cmap="coolwarm",
+        )
+        axes[0, 0].plot(
+            [df_plot["Actual"].min(), df_plot["Actual"].max()],
+            [df_plot["Actual"].min(), df_plot["Actual"].max()],
+            color="green",
+            linestyle="--",
+        )
+        axes[0, 0].set_title("Actual vs. Predicted Prices")
+        axes[0, 0].set_xlabel("Actual Price")
+        axes[0, 0].set_ylabel("Predicted Price")
+        axes[0, 0].grid()
+
+        # 2. Error Distribution by Price Range
+        sns.boxplot(
+            x="Price Range", y=abs(y_true - y_pred), data=df_plot, ax=axes[0, 1]
+        )
+        axes[0, 1].set_title("Error Distribution by Price Range")
+        axes[0, 1].set_xlabel("Price Range")
+        axes[0, 1].set_ylabel("Absolute Error")
+
+        # 3. Cumulative Error Plot
+        thresholds = range(0, int(abs(y_true - y_pred).max()), 50)
+        cumulative_percentage = [
+            sum(abs(y_true - y_pred) <= t) / len(y_true) * 100 for t in thresholds
+        ]
+        axes[1, 0].plot(thresholds, cumulative_percentage, marker="o")
+        axes[1, 0].set_title("Cumulative Error Plot")
+        axes[1, 0].set_xlabel("Error Threshold")
+        axes[1, 0].set_ylabel("Cumulative Percentage of Predictions")
+        axes[1, 0].grid()
+
+        # 4. Price Range Accuracy Bar Chart with Multiple Thresholds
+        thresholds = [0.05, 0.1, 0.2, 0.5]  # Define thresholds (5%, 10%, 20%, 50%)
+        accuracy_by_range = {}
+
+        # Calculate accuracy for each threshold
+        for threshold in thresholds:
+            df_plot[f"Within Tolerance {int(threshold * 100)}%"] = (
+                abs(y_true - y_pred) <= threshold * y_true
+            )
+            accuracy_by_range[threshold] = (
+                df_plot.groupby("Price Range", observed=True)[
+                    f"Within Tolerance {int(threshold * 100)}%"
+                ].mean()
+                * 100
+            )
+
+        # Plot grouped bars
+        x = np.arange(len(labels))  # X positions for groups (price ranges)
+        bar_width = 0.2  # Width of each bar
+
+        for i, threshold in enumerate(thresholds):
+            axes[1, 1].bar(
+                x
+                + (i - len(thresholds) / 2) * bar_width
+                + bar_width / 2,  # Offset bars
+                accuracy_by_range[threshold].values,
+                bar_width,
+                label=f"{int(threshold * 100)}% Tolerance",
+            )
+
+        # Configure the plot
+        axes[1, 1].set_title("Accuracy by Price Range for Multiple Tolerances")
+        axes[1, 1].set_xlabel("Price Range")
+        axes[1, 1].set_ylabel("Accuracy (%)")
+        axes[1, 1].set_xticks(x)
+        axes[1, 1].set_xticklabels(labels)
+        axes[1, 1].legend(title="Tolerance")
+        axes[1, 1].grid()
+
+        # 6. Within Estimates Plot (Predicted vs. Actual vs. Estimated Ranges)
+        valid_estimates = (df["Estimated Minimum Price"] > 0) & (
+            df["Estimated Maximum Price"] > 0
+        )
+        filtered_df = df[valid_estimates].copy()
+        filtered_y_true = y_true[valid_estimates]
+        filtered_y_pred = y_pred[valid_estimates]
+
+        estimated_min = filtered_df["Estimated Minimum Price"]
+        estimated_max = filtered_df["Estimated Maximum Price"]
+
+        within_estimates_actual = (filtered_y_true >= estimated_min) & (
+            filtered_y_true <= estimated_max
+        )
+        within_estimates_predicted = (filtered_y_pred >= estimated_min) & (
+            filtered_y_pred <= estimated_max
+        )
+
+        filtered_df.loc[:, "Within Estimates Actual"] = within_estimates_actual
+        filtered_df.loc[:, "Within Estimates Predicted"] = within_estimates_predicted
+
+        filtered_df.loc[:, "Price Range"] = pd.cut(
+            filtered_y_true,
+            bins=bins,
+            labels=labels,
+        )
+
+        actual_within_percent = (
+            filtered_df.groupby("Price Range", observed=True)[
+                "Within Estimates Actual"
+            ].mean()
+            * 100
+        )
+        predicted_within_percent = (
+            filtered_df.groupby("Price Range", observed=True)[
+                "Within Estimates Predicted"
+            ].mean()
+            * 100
+        )
+
+        actual_deviation = np.where(
+            filtered_y_true < estimated_min,
+            estimated_min - filtered_y_true,
+            np.where(
+                filtered_y_true > estimated_max, filtered_y_true - estimated_max, 0
+            ),
+        )
+        predicted_deviation = np.where(
+            filtered_y_pred < estimated_min,
+            estimated_min - filtered_y_pred,
+            np.where(
+                filtered_y_pred > estimated_max, filtered_y_pred - estimated_max, 0
+            ),
+        )
+
+        filtered_df.loc[:, "Actual Deviation"] = actual_deviation
+        filtered_df.loc[:, "Predicted Deviation"] = predicted_deviation
+
+        mean_deviation = filtered_df.groupby("Price Range", observed=True)[
+            ["Actual Deviation", "Predicted Deviation"]
+        ].mean()
+
+        x = np.arange(len(actual_within_percent))
+        bar_width = 0.35
+        axes[2, 1].bar(
+            x - bar_width / 2,
+            actual_within_percent.values,
+            bar_width,
+            color="blue",
+            alpha=0.6,
+            label="Actual Sold Price",
+        )
+        axes[2, 1].bar(
+            x + bar_width / 2,
+            predicted_within_percent.values,
+            bar_width,
+            color="orange",
+            alpha=0.6,
+            label="Predicted Price",
+        )
+        axes[2, 1].set_title("Percentage Within Estimates by Price Range")
+        axes[2, 1].set_xlabel("Price Range")
+        axes[2, 1].set_ylabel("Percentage Within Estimates (%)")
+        axes[2, 1].set_xticks(x)
+        axes[2, 1].set_xticklabels(actual_within_percent.index)
+        axes[2, 1].legend()
+        axes[2, 1].grid()
+
+        actual_deviation = np.where(
+            filtered_y_true < estimated_min,
+            estimated_min - filtered_y_true,
+            np.where(
+                filtered_y_true > estimated_max, filtered_y_true - estimated_max, 0
+            ),
+        )
+        predicted_deviation = np.where(
+            filtered_y_pred < estimated_min,
+            estimated_min - filtered_y_pred,
+            np.where(
+                filtered_y_pred > estimated_max, filtered_y_pred - estimated_max, 0
+            ),
+        )
+
+        filtered_df.loc[:, "Actual Deviation"] = actual_deviation
+        filtered_df.loc[:, "Predicted Deviation"] = predicted_deviation
+
+        mean_deviation = filtered_df.groupby("Price Range", observed=True)[
+            ["Actual Deviation", "Predicted Deviation"]
+        ].mean()
+
+        # 5. Plot Heatmap of Deviations
+        sns.heatmap(
+            mean_deviation.T,
+            annot=True,
+            cmap="coolwarm",
+            fmt=".2f",
+            ax=axes[2, 0],
+        )
+        axes[2, 0].set_title("Mean Deviation from Estimated Range by Price Range")
+        axes[2, 0].set_xlabel("Price Range")
+        axes[2, 0].set_ylabel("Deviation Type")
+
+        # Adjust layout
+        plt.tight_layout(rect=[0, 0, 1, 0.92])  # Leave space for the legend
+        plt.show()

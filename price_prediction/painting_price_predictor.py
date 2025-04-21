@@ -121,7 +121,6 @@ class PaintingPricePredictor(BasePredictor):
     ) -> pd.DataFrame:
         self.regressor.clear_fit()
         processed_df = self.preprocess_data(df, is_training=True)
-        # processed_df.to_csv("processed_data_joined.csv", index=False, sep=";")
 
         self.regressor.feature_columns = processed_df.columns.tolist()
         self.regressor.feature_types = processed_df.dtypes.to_dict()
@@ -311,6 +310,22 @@ class PaintingPricePredictor(BasePredictor):
         X = self.generate_combined_embeddings(processed_df)
 
         return self.regressor.predict(X)[0]
+
+    def predict_random_paintings(self, df: pd.DataFrame, count: int):
+        processed_df = self.preprocess_data(df, is_training=True)
+
+        X, y = self.generate_combined_embeddings(processed_df), processed_df[
+            "Sold Price"
+        ].astype(float)
+
+        np.random.seed(42)
+        random_indexes = np.random.randint(0, len(X), size=count)
+        for index in random_indexes:
+            X_random = X[index].reshape(1, -1)
+            y_random = y.iloc[index]
+
+            y_pred = self.regressor.predict(X_random)
+            print(f"Actual: {y_random}, Predicted: {y_pred[0]}")
 
     def cross_validate(self, df: pd.DataFrame, k: int) -> Dict[str, float]:
         df = self.preprocess_data(df)
