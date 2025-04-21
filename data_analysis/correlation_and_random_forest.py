@@ -174,6 +174,22 @@ def calculate_textual_column_correlation(
                     correlations.append(
                         (f"{column}_PCA_Component_{i+1}", component_correlation)
                     )
+
+                # # Apply PCA to reduce dimensionality
+                # print(
+                #     f"Applying PCA with {pca_components} components for column: {column}"
+                # )
+                # pca = PCA(n_components=pca_components)
+                # reduced_embeddings = pca.fit_transform(embeddings)
+
+                # # Calculate mean correlation across all PCA components
+                # target_values = df[target_column].values
+                # component_correlations = [
+                #     pearsonr(reduced_embeddings[:, i], target_values)[0]
+                #     for i in range(reduced_embeddings.shape[1])
+                # ]
+                # mean_correlation = np.mean(component_correlations)
+                # correlations.append((column, mean_correlation))
             else:
                 # # Use mean of embeddings if PCA is not specified
                 # reduced_embeddings = np.mean(embeddings, axis=1)
@@ -201,6 +217,81 @@ def calculate_textual_column_correlation(
     return correlations
 
 
-textual_column_correlations = calculate_textual_column_correlation(
-    df, textual_columns, pca_components=None
+def get_textual_embeddings(df, textual_columns, pca_components=20):
+    all_embeddings = []
+    column_names = []
+    for column in textual_columns:
+        if column in df.columns:
+            print(f"Embedding column: {column}")
+            embeddings = text_model.encode(
+                df[column].astype(str).tolist(), show_progress_bar=True
+            )
+            if pca_components:
+                print(
+                    f"Applying PCA with {pca_components} components for column: {column}"
+                )
+                pca = PCA(n_components=pca_components)
+                reduced_embeddings = pca.fit_transform(embeddings)
+                all_embeddings.append(reduced_embeddings)
+                # Add column names for each PCA component
+                column_names.extend(
+                    [f"{column}_PCA_Component_{i+1}" for i in range(pca_components)]
+                )
+    if all_embeddings:
+        return np.hstack(all_embeddings), column_names
+    return None, []
+
+
+# === Textual column correlations using mean or PCA ===
+# textual_column_correlations = calculate_textual_column_correlation(
+#     df, textual_columns, pca_components=20
+# )
+
+# === Decision tree importance ===
+textual_embeddings, textual_column_names = get_textual_embeddings(
+    df, textual_columns, pca_components=20
 )
+
+combined_features = np.hstack([numeric_array, textual_embeddings])
+target = df["Sold Price"].values
+
+model = RandomForestRegressor(n_estimators=100, random_state=42)
+model.fit(combined_features, target)
+
+# Feature importance for numeric features
+print("\nFeature importance (numeric features only):")
+numeric_importances = model.feature_importances_[: len(existing_numeric_columns)]
+numeric_feature_importance_df = pd.DataFrame(
+    {"Feature": existing_numeric_columns, "Importance": numeric_importances}
+).sort_values(by="Importance", ascending=False)
+for _, row in numeric_feature_importance_df.iterrows():
+    print(f"{row['Feature']}: {row['Importance']:.8f}")
+
+# Feature importance for textual features
+if textual_embeddings is not None:
+    print("\nFeature importance (textual features):")
+    textual_importances = model.feature_importances_[len(existing_numeric_columns) :]
+    textual_feature_importance_df = pd.DataFrame(
+        {"Feature": textual_column_names, "Importance": textual_importances}
+    ).sort_values(by="Importance", ascending=False)
+    for _, row in textual_feature_importance_df.iterrows():
+        print(f"{row['Feature']}: {row['Importance']:.8f}")
+
+# Mean textual importances
+if textual_embeddings is not None:
+    print("\nMean feature importance per textual column:")
+    column_mean_importances = {}
+    for feature, importance in zip(textual_column_names, textual_importances):
+        original_column = feature.split("_PCA_Component_")[0]
+        if original_column not in column_mean_importances:
+            column_mean_importances[original_column] = []
+        column_mean_importances[original_column].append(importance)
+    mean_importances = {
+        column: np.mean(importances)
+        for column, importances in column_mean_importances.items()
+    }
+    sorted_mean_importances = sorted(
+        mean_importances.items(), key=lambda x: x[1], reverse=True
+    )
+    for column, mean_importance in sorted_mean_importances:
+        print(f"{column}: {mean_importance:.8f}")
