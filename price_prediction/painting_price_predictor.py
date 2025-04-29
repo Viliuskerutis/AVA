@@ -133,6 +133,16 @@ class PaintingPricePredictor(BasePredictor):
 
         y_pred = self.regressor.predict(X)
 
+        # Include Estimated Min and Max Prices in the results DataFrame
+        result_df = pd.DataFrame(
+            {
+                "Actual": y,
+                "Predicted": y_pred,
+                "Estimated Minimum Price": processed_df["Estimated Minimum Price"],
+                "Estimated Maximum Price": processed_df["Estimated Maximum Price"],
+            }
+        )
+
         metrics = self.evaluate_metrics(y, y_pred, processed_df)
 
         if log_results:
@@ -179,7 +189,7 @@ class PaintingPricePredictor(BasePredictor):
                 None,
             )
 
-        return pd.DataFrame({"Actual": y, "Predicted": y_pred})
+        return result_df
 
     def train_with_test_split(
         self, df: pd.DataFrame, test_size: float = 0.3, log_results: bool = True
@@ -243,14 +253,21 @@ class PaintingPricePredictor(BasePredictor):
         y_pred = self.regressor.predict(X_test)
 
         df_test = processed_df.iloc[y_test.index]
+
+        result_df = pd.DataFrame(
+            {
+                "Actual": y_test.values,
+                "Predicted": y_pred,
+                "Estimated Minimum Price": df_test["Estimated Minimum Price"].values,
+                "Estimated Maximum Price": df_test["Estimated Maximum Price"].values,
+            }
+        )
+
         metrics = self.evaluate_metrics(y_test, y_pred, df_test)
 
         if log_results:
             text_columns = self.TEXT_COLUMNS + self.additional_text_columns
             numeric_columns = self.NUMERIC_COLUMNS + self.additional_numeric_columns
-
-            # if self.use_images:
-            #     numeric_columns += [f"Image_Feature_{i+1}" for i in range(self.use_images)]
 
             used_columns_count = len(text_columns) + len(numeric_columns)
 
@@ -292,7 +309,7 @@ class PaintingPricePredictor(BasePredictor):
                 nn_info if nn_info else None,
             )
 
-        return pd.DataFrame({"Actual": y_test, "Predicted": y_pred})
+        return result_df
 
     def predict_single_painting(
         self, row: Union[Dict[str, Any], pd.Series]

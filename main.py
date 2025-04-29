@@ -120,12 +120,15 @@ def predict_price(
             predictor.train(data_df)
         else:
             if use_test_split:
-                predictor.train_with_test_split(data_df, test_size=0.3)
+                prediction_results = predictor.train_with_test_split(
+                    data_df, test_size=0.3
+                )
             else:
-                predictor.train_with_same_data(data_df)
+                prediction_results = predictor.train_with_same_data(data_df)
 
         predictor.save_model(model_path)
 
+    predictor.evaluate_custom_estimates(prediction_results)
     predicted_price = predictor.predict_random_paintings(data_df, count=100)
 
     # predicted_price = predictor.predict_single_painting(painting_data_dict)
@@ -265,7 +268,7 @@ if __name__ == "__main__":
         #     hot_encode_columns=["Surface", "Materials"],
         #     use_artfacts=False,
         #     use_images=50,
-        #     use_count=False,
+        #     use_count=True,
         #     use_synthetic=True,
         #     use_artsy=False,
         #     embedding_model_type=EmbeddingModelType.ALL_MPNET_BASE,

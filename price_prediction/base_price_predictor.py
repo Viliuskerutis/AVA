@@ -946,3 +946,285 @@ class BasePredictor(ABC):
         plt.subplots_adjust(hspace=0.4)  # Increase the value to add more space
 
         plt.show()
+
+    def evaluate_custom_estimates(
+        self, results_df: pd.DataFrame
+    ) -> Dict[str, Dict[str, float]]:
+        custom_estimate_tables = [
+            [
+                (100, 0.2),
+                (200, 0.2),
+                (500, 0.15),
+                (3000, 0.1),
+                (10000, 0.1),
+                (200000, 0.07),
+            ],
+            [
+                (100, 0.15),
+                (200, 0.15),
+                (500, 0.1),
+                (3000, 0.05),
+                (10000, 0.05),
+                (200000, 0.03),
+            ],
+            [
+                (100, 0.25),
+                (200, 0.25),
+                (500, 0.2),
+                (3000, 0.15),
+                (10000, 0.15),
+                (200000, 0.1),
+            ],
+        ]
+
+        results = {}
+
+        for i, custom_estimate_table in enumerate(custom_estimate_tables):
+
+            def calculate_custom_estimates(predicted_price):
+                for price, percentage in custom_estimate_table:
+                    if predicted_price <= price:
+                        added_value = predicted_price * percentage
+                        return (
+                            predicted_price - added_value,
+                            predicted_price + added_value,
+                        )
+                percentage = custom_estimate_table[-1][1]
+                added_value = predicted_price * percentage
+                return (
+                    predicted_price - added_value,
+                    predicted_price + added_value,
+                )
+
+            filtered_df = results_df[
+                (results_df["Estimated Minimum Price"] > 0)
+                & (results_df["Estimated Maximum Price"] > 0)
+            ].copy()
+
+            filtered_df[["Custom Min Estimate", "Custom Max Estimate"]] = filtered_df[
+                "Predicted"
+            ].apply(lambda x: pd.Series(calculate_custom_estimates(x)))
+
+            filtered_df["Custom Min Within Professional"] = (
+                filtered_df["Custom Min Estimate"]
+                >= filtered_df["Estimated Minimum Price"]
+            ) & (
+                filtered_df["Custom Min Estimate"]
+                <= filtered_df["Estimated Maximum Price"]
+            )
+
+            filtered_df["Custom Max Within Professional"] = (
+                filtered_df["Custom Max Estimate"]
+                >= filtered_df["Estimated Minimum Price"]
+            ) & (
+                filtered_df["Custom Max Estimate"]
+                <= filtered_df["Estimated Maximum Price"]
+            )
+
+            filtered_df["Custom Within Professional"] = (
+                filtered_df["Custom Min Within Professional"]
+                & filtered_df["Custom Max Within Professional"]
+            )
+
+            filtered_df["Custom-Professional Intercept"] = (
+                filtered_df[["Custom Max Estimate", "Estimated Maximum Price"]].min(
+                    axis=1
+                )
+                - filtered_df[["Custom Min Estimate", "Estimated Minimum Price"]].max(
+                    axis=1
+                )
+            ).clip(lower=0)
+
+            filtered_df["Custom-Professional Intercept Percentage"] = (
+                filtered_df["Custom-Professional Intercept"]
+                / (
+                    filtered_df["Estimated Maximum Price"]
+                    - filtered_df["Estimated Minimum Price"]
+                )
+            ).fillna(0) * 100
+
+            alignment_summary = {
+                "Custom Within Professional (%)": filtered_df[
+                    "Custom Within Professional"
+                ].mean()
+                * 100,
+                "Custom Min Within Professional (%)": filtered_df[
+                    "Custom Min Within Professional"
+                ].mean()
+                * 100,
+                "Custom Max Within Professional (%)": filtered_df[
+                    "Custom Max Within Professional"
+                ].mean()
+                * 100,
+                "Custom-Professional Intercept (%)": filtered_df[
+                    "Custom-Professional Intercept Percentage"
+                ].mean(),
+            }
+
+            results[f"Table {i + 1}"] = alignment_summary
+
+            print(f"Table {i + 1} - Custom Estimates Alignment: {alignment_summary}")
+
+            self.plot_interception_metrics(filtered_df, table_name=f"Table {i + 1}")
+
+        return results
+
+    def plot_interception_metrics(
+        self, results_df: pd.DataFrame, table_name: str
+    ) -> None:
+        """
+        Draws a single plot with subplots to visualize interception metrics for a specific table.
+
+        Args:
+            results_df (pd.DataFrame): DataFrame containing interception metrics and price ranges.
+            table_name (str): Name or index of the custom estimate table being plotted.
+        """
+        bins = [0, 100, 1000, 2000, 5000]
+        labels = ["Low", "Medium", "High", "Very High"]
+
+        results_df["Price Range"] = pd.cut(
+            results_df["Predicted"], bins=bins, labels=labels
+        )
+
+        # Create a figure with subplots
+        fig, axes = plt.subplots(3, 2, figsize=(18, 16))
+        fig.suptitle(f"Interception Metrics for {table_name}", fontsize=16)
+
+        # Add a legend at the top for price ranges
+        handles = [
+            plt.Line2D(
+                [0], [0], color="none", label=f"{label}: {bins[i]} - {bins[i + 1]}"
+            )
+            for i, label in enumerate(labels)
+        ]
+        fig.legend(
+            handles=handles,
+            loc="upper center",
+            fontsize=10,
+            title="Price Ranges",
+            ncol=len(labels),
+            frameon=True,
+            bbox_to_anchor=(0.5, 0.95),
+        )
+
+        # 1. Bar Chart: Average Interception Percentage by Price Range
+        avg_interception = results_df.groupby("Price Range")[
+            "Custom-Professional Intercept Percentage"
+        ].mean()
+
+        axes[0, 0].bar(
+            avg_interception.index, avg_interception, color="skyblue", edgecolor="black"
+        )
+        axes[0, 0].set_title("Average Interception Percentage by Price Range")
+        axes[0, 0].set_xlabel("Price Range")
+        axes[0, 0].set_ylabel("Average Interception Percentage (%)")
+        axes[0, 0].grid(axis="y", linestyle="--", alpha=0.7)
+
+        # 2. Box Plot: Distribution of Interception Percentage by Price Range
+        sns.boxplot(
+            x="Price Range",
+            y="Custom-Professional Intercept Percentage",
+            data=results_df,
+            palette="coolwarm",
+            ax=axes[0, 1],
+        )
+        axes[0, 1].set_title("Distribution of Interception Percentage by Price Range")
+        axes[0, 1].set_xlabel("Price Range")
+        axes[0, 1].set_ylabel("Interception Percentage (%)")
+        axes[0, 1].grid(axis="y", linestyle="--", alpha=0.7)
+
+        # 3. Stacked Bar Chart: Breakdown of Interception Cases by Interception Bins
+        interception_bins = [0, 25, 50, 75, 100]
+        interception_labels = ["0-25%", "25-50%", "50-75%", "75-100%"]
+
+        results_df["Interception Bin"] = pd.cut(
+            results_df["Custom-Professional Intercept Percentage"],
+            bins=interception_bins,
+            labels=interception_labels,
+        )
+
+        stacked_data = (
+            results_df.groupby(["Price Range", "Interception Bin"]).size().unstack()
+        )
+        stacked_data = stacked_data.div(stacked_data.sum(axis=1), axis=0) * 100
+
+        stacked_data.plot(
+            kind="bar", stacked=True, colormap="viridis", ax=axes[1, 0], legend=False
+        )
+        axes[1, 0].set_title("Breakdown of Interception Percentage by Price Range")
+        axes[1, 0].set_xlabel("Price Range")
+        axes[1, 0].set_ylabel("Percentage of Cases (%)")
+        axes[1, 0].grid(axis="y", linestyle="--", alpha=0.7)
+
+        # 4. Scatter Plot: Interception Percentage vs. Predicted Price
+        sns.scatterplot(
+            x="Predicted",
+            y="Custom-Professional Intercept Percentage",
+            hue="Price Range",
+            data=results_df,
+            palette="Set2",
+            alpha=0.7,
+            ax=axes[1, 1],
+        )
+        axes[1, 1].set_title("Interception Percentage vs. Predicted Price")
+        axes[1, 1].set_xlabel("Predicted Price")
+        axes[1, 1].set_ylabel("Interception Percentage (%)")
+        axes[1, 1].grid(linestyle="--", alpha=0.7)
+
+        # 5. Bar Chart: Custom Within Professional Percentage by Price Range
+        custom_within_professional = (
+            results_df.groupby("Price Range")["Custom Within Professional"].mean() * 100
+        )
+
+        axes[2, 0].bar(
+            custom_within_professional.index,
+            custom_within_professional,
+            color="lightgreen",
+            edgecolor="black",
+        )
+        axes[2, 0].set_title("Custom Within Professional Percentage by Price Range")
+        axes[2, 0].set_xlabel("Price Range")
+        axes[2, 0].set_ylabel("Percentage (%)")
+        axes[2, 0].grid(axis="y", linestyle="--", alpha=0.7)
+
+        # 6. Line Plot: Custom Within Professional Percentage Across Predicted Prices
+        results_df["Predicted Bin"] = pd.cut(
+            results_df["Predicted"], bins=20  # Divide predicted prices into 20 bins
+        )
+
+        line_data = (
+            results_df.groupby("Predicted Bin")["Custom Within Professional"].mean()
+            * 100
+        )
+
+        # Extract bin ranges for X-axis labels
+        bin_labels = [
+            f"{int(interval.left)}-{int(interval.right)}"
+            for interval in line_data.index.categories
+        ]
+
+        axes[2, 1].plot(
+            range(len(line_data)),  # Use numerical indices for plotting
+            line_data.values,
+            marker="o",
+            linestyle="-",
+            color="purple",
+            alpha=0.8,
+        )
+        axes[2, 1].set_title(
+            "Custom Within Professional Percentage Across Predicted Prices"
+        )
+        axes[2, 1].set_xlabel("Predicted Price Range")
+        axes[2, 1].set_ylabel("Percentage (%)")
+        axes[2, 1].set_xticks(
+            range(len(bin_labels))
+        )  # Set X-ticks to match bin indices
+        axes[2, 1].set_xticklabels(
+            bin_labels, rotation=45, ha="right"
+        )  # Use bin ranges as labels
+        axes[2, 1].grid(linestyle="--", alpha=0.7)
+
+        # Adjust layout
+        plt.tight_layout(rect=[0, 0.05, 1, 0.85])
+        plt.subplots_adjust(hspace=0.7)
+        plt.show()
