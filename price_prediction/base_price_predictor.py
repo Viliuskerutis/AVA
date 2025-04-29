@@ -1012,7 +1012,6 @@ class BasePredictor(ABC):
                 filtered_df["Custom Min Estimate"]
                 <= filtered_df["Estimated Maximum Price"]
             )
-
             filtered_df["Custom Max Within Professional"] = (
                 filtered_df["Custom Max Estimate"]
                 >= filtered_df["Estimated Minimum Price"]
@@ -1020,11 +1019,20 @@ class BasePredictor(ABC):
                 filtered_df["Custom Max Estimate"]
                 <= filtered_df["Estimated Maximum Price"]
             )
-
             filtered_df["Custom Within Professional"] = (
                 filtered_df["Custom Min Within Professional"]
                 & filtered_df["Custom Max Within Professional"]
             )
+
+            filtered_df["Actual Within Professional Estimate"] = (
+                filtered_df["Actual"] >= filtered_df["Estimated Minimum Price"]
+            ) & (filtered_df["Actual"] <= filtered_df["Estimated Maximum Price"])
+            filtered_df["Actual Within Custom Estimate"] = (
+                filtered_df["Actual"] >= filtered_df["Custom Min Estimate"]
+            ) & (filtered_df["Actual"] <= filtered_df["Custom Max Estimate"])
+            filtered_df["Predicted Within Professional Estimate"] = (
+                filtered_df["Predicted"] >= filtered_df["Estimated Minimum Price"]
+            ) & (filtered_df["Predicted"] <= filtered_df["Estimated Maximum Price"])
 
             filtered_df["Custom-Professional Intercept"] = (
                 filtered_df[["Custom Max Estimate", "Estimated Maximum Price"]].min(
@@ -1059,6 +1067,18 @@ class BasePredictor(ABC):
                 "Custom-Professional Intercept (%)": filtered_df[
                     "Custom-Professional Intercept Percentage"
                 ].mean(),
+                "Actual Within Professional Estimate (%)": filtered_df[
+                    "Actual Within Professional Estimate"
+                ].mean()
+                * 100,
+                "Actual Within Custom Estimate (%)": filtered_df[
+                    "Actual Within Custom Estimate"
+                ].mean()
+                * 100,
+                "Predicted Within Professional Estimate (%)": filtered_df[
+                    "Predicted Within Professional Estimate"
+                ].mean()
+                * 100,
             }
 
             results[f"Table {i + 1}"] = alignment_summary
