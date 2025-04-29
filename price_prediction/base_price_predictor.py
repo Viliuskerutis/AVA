@@ -30,6 +30,26 @@ class BasePredictor(ABC):
     Abstract base class for predictors to enforce common functionality.
     """
 
+    # NUMERIC_COLUMNS = [
+    #     "Max Sold Price",
+    #     "Artist Birth Year",
+    #     "Min Sold Price",
+    #     "Creation Year",
+    #     "Years from auction till now",
+    #     "Width",
+    #     "Height",
+    #     "Average Sold Price",
+    #     "Area",
+    # ]
+
+    # TEXT_COLUMNS = [
+    #     "Auction House",
+    #     "Artist name",
+    #     "Auction Country",
+    #     "Surface",
+    #     "Materials",
+    # ]
+
     NUMERIC_COLUMNS = [
         # "Artist Birth Year",
         # "Artist Death Year",
@@ -275,6 +295,10 @@ class BasePredictor(ABC):
             df (pd.DataFrame): The dataset to preprocess.
             is_training (bool): Whether the preprocessing is for training or prediction.
         """
+        if is_training and hasattr(self, "preprocessed_df"):
+            print("Using cached preprocessed DataFrame.")
+            return self.preprocessed_df
+
         # Add image features if enabled
         if self.use_images:
             df = self.add_image_features(df)
@@ -291,7 +315,20 @@ class BasePredictor(ABC):
                 csv_path=self.artist_info_path,
                 csv_key_column="Name",
                 columns_to_exclude=["Birth Year", "Death Year"],
-                # columns_to_include=["Nationality"],
+                # columns_to_include=[
+                #     "Biennials",
+                #     "Art Fairs",
+                #     "Solo Exhibitions",
+                #     "Exhibitions Most With 1 No",
+                #     "Verified Exhibitions",
+                #     "Exhibitions Most At 2 No",
+                #     "Exhibitions Top Country 1 No",
+                #     "Description",
+                #     "Exhibitions Most With 2",
+                #     "Notable Exhibitions At 1",
+                #     "Exhibitions Top Country 1",
+                #     "Exhibitions Most At 1",
+                # ],
                 use_fuzzy_matching=True,
                 use_partial_matching=True,
             )
@@ -324,6 +361,11 @@ class BasePredictor(ABC):
                 csv_path=self.synthetic_paths[0],
                 csv_key_column="Artist name",
                 columns_to_exclude=["Score Explanations"],
+                # columns_to_include=[
+                #     "Auction Record Price",
+                #     "Artistic Styles",
+                #     "Primary Market",
+                # ],
                 use_fuzzy_matching=True,
                 use_partial_matching=True,
             )
@@ -335,6 +377,14 @@ class BasePredictor(ABC):
                 df_key_column="Auction House",
                 csv_path=self.synthetic_paths[1],
                 csv_key_column="Auction House",
+                # columns_to_include=[
+                #     "Repeat Buyer Percentage",
+                #     "Specialization Score",
+                #     "Prestige Rank",
+                #     "Top Sale Price Record",
+                #     "Marketing Power Rank",
+                #     "Liquidity Score",
+                # ],
                 columns_to_exclude=["Score Explanations"],
                 use_fuzzy_matching=True,
                 use_partial_matching=True,
@@ -375,6 +425,7 @@ class BasePredictor(ABC):
 
         if is_training:
             df = process_keep_relevant(df, max_missing_percent=self.max_missing_percent)
+            self.preprocessed_df = df
         return df
 
     def calculate_midpoints(self, df: pd.DataFrame) -> pd.Series:
@@ -447,20 +498,6 @@ class BasePredictor(ABC):
                     filtered_y_true,
                     bins=bins,
                     labels=labels,
-                )
-
-                # Calculate percentages for each price range
-                actual_within_percent = (
-                    filtered_df.groupby("Price Range", observed=True)[
-                        "Within Estimates Actual"
-                    ].mean()
-                    * 100
-                )
-                predicted_within_percent = (
-                    filtered_df.groupby("Price Range", observed=True)[
-                        "Within Estimates Predicted"
-                    ].mean()
-                    * 100
                 )
 
                 # Calculate deviations for actual and predicted prices
@@ -732,7 +769,14 @@ class BasePredictor(ABC):
         axes[1, 0].set_title("Cumulative Error Plot")
         axes[1, 0].set_xlabel("Error Threshold")
         axes[1, 0].set_ylabel("Cumulative Percentage of Predictions")
-        axes[1, 0].grid()
+
+        # Set x-ticks more frequently
+        axes[1, 0].set_xticks(range(0, int(abs(y_true - y_pred).max()) + 1, 200))
+        axes[1, 0].tick_params(axis="x", rotation=60)
+        axes[1, 0].set_yticks(range(0, 101, 10))  # Every 10% for y-axis
+
+        # Add grid for both x and y ticks
+        axes[1, 0].grid(which="both", linestyle="--", linewidth=0.5)
 
         # 4. Price Range Accuracy Bar Chart with Multiple Thresholds
         thresholds = [0.05, 0.1, 0.2, 0.5]  # Define thresholds (5%, 10%, 20%, 50%)
@@ -876,11 +920,11 @@ class BasePredictor(ABC):
             ),
         )
 
-        filtered_df.loc[:, "Actual Deviation"] = actual_deviation
-        filtered_df.loc[:, "Predicted Deviation"] = predicted_deviation
+        filtered_df.loc[:, "Actual"] = actual_deviation
+        filtered_df.loc[:, "Predicted"] = predicted_deviation
 
         mean_deviation = filtered_df.groupby("Price Range", observed=True)[
-            ["Actual Deviation", "Predicted Deviation"]
+            ["Actual", "Predicted"]
         ].mean()
 
         # 5. Plot Heatmap of Deviations
@@ -896,5 +940,9 @@ class BasePredictor(ABC):
         axes[2, 0].set_ylabel("Deviation Type")
 
         # Adjust layout
-        plt.tight_layout(rect=[0, 0, 1, 0.92])  # Leave space for the legend
+        plt.tight_layout(rect=[0, 0.05, 1, 0.92])  # Leave space for the legend
+
+        # Adjust vertical spacing between subplots
+        plt.subplots_adjust(hspace=0.4)  # Increase the value to add more space
+
         plt.show()

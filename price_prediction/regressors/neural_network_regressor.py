@@ -69,7 +69,7 @@ class NeuralNetworkRegressor(BaseRegressor):
             del self.scheduler
             torch.cuda.empty_cache()
 
-    def train(self, X_train, y_train, X_validation, y_validation):
+    def train(self, X_train, y_train, X_validation=None, y_validation=None):
         # Ensure input size matches the data
         self.input_size = X_train.shape[1]
         self.model = self._build_model()
@@ -92,17 +92,23 @@ class NeuralNetworkRegressor(BaseRegressor):
             train_dataset, batch_size=self.batch_size, shuffle=True
         )
 
-        X_validation = self.scaler.transform(X_validation)
-        X_val_tensor = torch.tensor(X_validation, dtype=torch.float32).to(self.device)
-        y_val_tensor = (
-            torch.tensor(y_validation.to_numpy(), dtype=torch.float32)
-            .view(-1, 1)
-            .to(self.device)
-        )
-        val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
-        val_dataloader = DataLoader(
-            val_dataset, batch_size=self.batch_size, shuffle=False
-        )
+        # Handle validation data if provided
+        val_dataloader = None
+        use_validation = X_validation is not None and y_validation is not None
+        if use_validation:
+            X_validation = self.scaler.transform(X_validation)
+            X_val_tensor = torch.tensor(X_validation, dtype=torch.float32).to(
+                self.device
+            )
+            y_val_tensor = (
+                torch.tensor(y_validation.to_numpy(), dtype=torch.float32)
+                .view(-1, 1)
+                .to(self.device)
+            )
+            val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
+            val_dataloader = DataLoader(
+                val_dataset, batch_size=self.batch_size, shuffle=False
+            )
 
         # Early stopping variables
         best_loss = float("inf")
@@ -126,27 +132,31 @@ class NeuralNetworkRegressor(BaseRegressor):
             epoch_loss /= len(train_dataloader)
             print(f"Training Loss: {epoch_loss:.4f}")
 
-            # Validation loss
-            self.model.eval()
-            val_loss = 0.0
-            with torch.no_grad():
-                for batch_X, batch_y in val_dataloader:
-                    outputs = self.model(batch_X)
-                    loss = self.loss_function(outputs, batch_y)
-                    val_loss += loss.item()
-            val_loss /= len(val_dataloader)
-            print(f"Validation Loss: {val_loss:.4f}")
+            # Validation loss if validation data is provided
+            if use_validation:
+                self.model.eval()
+                val_loss = 0.0
+                with torch.no_grad():
+                    for batch_X, batch_y in val_dataloader:
+                        outputs = self.model(batch_X)
+                        loss = self.loss_function(outputs, batch_y)
+                        val_loss += loss.item()
+                val_loss /= len(val_dataloader)
+                print(f"Validation Loss: {val_loss:.4f}")
+                current_loss = val_loss
+            else:
+                current_loss = epoch_loss
 
             # Check for improvement with tolerance
-            if val_loss < best_loss - tolerance:
-                best_loss = val_loss
+            if current_loss < best_loss - tolerance:
+                best_loss = current_loss
                 epochs_no_improve = 0
             else:
                 epochs_no_improve += 1
 
             # Reduce learning rate if loss plateaus
             prev_lr = self.optimizer.param_groups[0]["lr"]
-            self.scheduler.step(val_loss)
+            self.scheduler.step(current_loss)
             new_lr = self.optimizer.param_groups[0]["lr"]
             if new_lr != prev_lr:
                 print(f"Learning rate reduced to {new_lr:.6f}")
