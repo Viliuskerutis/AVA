@@ -1053,6 +1053,45 @@ class BasePredictor(ABC):
                 - filtered_df["Estimated Minimum Price"]
             )
 
+            filtered_df["Custom Min vs Professional Min Diff"] = (
+                filtered_df["Custom Min Estimate"]
+                - filtered_df["Estimated Minimum Price"]
+            ) / filtered_df["Estimated Minimum Price"]
+            filtered_df["Custom Max vs Professional Max Diff"] = (
+                filtered_df["Custom Max Estimate"]
+                - filtered_df["Estimated Maximum Price"]
+            ) / filtered_df["Estimated Maximum Price"]
+            filtered_df["Custom Min Absolute Difference"] = abs(
+                filtered_df["Custom Min Estimate"]
+                - filtered_df["Estimated Minimum Price"]
+            )
+            filtered_df["Custom Max Absolute Difference"] = abs(
+                filtered_df["Custom Max Estimate"]
+                - filtered_df["Estimated Maximum Price"]
+            )
+
+            filtered_df["Custom Min Absolute Percentage Difference"] = (
+                abs(
+                    (
+                        filtered_df["Custom Min Estimate"]
+                        - filtered_df["Estimated Minimum Price"]
+                    )
+                    / filtered_df["Estimated Minimum Price"]
+                )
+                * 100
+            )
+
+            filtered_df["Custom Max Absolute Percentage Difference"] = (
+                abs(
+                    (
+                        filtered_df["Custom Max Estimate"]
+                        - filtered_df["Estimated Maximum Price"]
+                    )
+                    / filtered_df["Estimated Maximum Price"]
+                )
+                * 100
+            )
+
             alignment_summary = {
                 "Custom Within Professional (%)": filtered_df[
                     "Custom Within Professional"
@@ -1081,15 +1120,44 @@ class BasePredictor(ABC):
                     "Predicted Within Professional Estimate"
                 ].mean()
                 * 100,
+                "Custom Min vs Professional Min Diff (%)": filtered_df[
+                    "Custom Min vs Professional Min Diff"
+                ].mean()
+                * 100,
+                "Custom Min Absolute Difference": filtered_df[
+                    "Custom Min Absolute Difference"
+                ].mean(),
+                "Custom Max vs Professional Max Diff (%)": filtered_df[
+                    "Custom Max vs Professional Max Diff"
+                ].mean()
+                * 100,
+                "Custom Max Absolute Difference": filtered_df[
+                    "Custom Max Absolute Difference"
+                ].mean(),
+                "Custom Min Absolute Percentage Difference (%)": filtered_df[
+                    "Custom Min Absolute Percentage Difference"
+                ].mean(),
+                "Custom Max Absolute Percentage Difference (%)": filtered_df[
+                    "Custom Max Absolute Percentage Difference"
+                ].mean(),
             }
 
             results[f"Table {i + 1}"] = alignment_summary
 
             print(f"Table {i + 1} - Custom Estimates Summary:")
             for metric, value in alignment_summary.items():
-                print(f"  {metric}: {value:.2f}%")
+                if (
+                    metric != "Custom Min Absolute Difference"
+                    and metric != "Custom Max Absolute Difference"
+                ):
+                    print(f"  {metric}: {value:.2f}%")
+                else:
+                    print(f"  {metric}: {value:.2f}")
 
-            self.plot_estimate_metrics(filtered_df, table_name=f"Table {i + 1}")
+            # self.plot_estimate_metrics(filtered_df, table_name=f"Table {i + 1}")
+            self.plot_custom_vs_professional_metrics(
+                filtered_df, table_name=f"Table {i + 1}"
+            )
 
         return results
 
@@ -1320,7 +1388,193 @@ class BasePredictor(ABC):
         # Adjust layout
         plt.tight_layout(rect=[0, 0.05, 1, 0.9])
         plt.subplots_adjust(hspace=0.6)
-        if table_name == "Table 3":
-            plt.show()
-        else:
+        plt.show(block=False)
+
+    def plot_custom_vs_professional_metrics(
+        self, results_df: pd.DataFrame, table_name: str
+    ) -> None:
+        """
+        Creates a plot with 8 subplots:
+        1. Bar chart showing the average percentage difference of Custom Min vs Professional Min by price range.
+        2. Bar chart showing the average percentage difference of Custom Max vs Professional Max by price range.
+        3. Bar chart showing the average absolute percentage difference of Custom Min by price range.
+        4. Bar chart showing the average absolute percentage difference of Custom Max by price range.
+        5. Scatter plot of Custom Min vs Professional Min with color gradient.
+        6. Scatter plot of Custom Max vs Professional Max with color gradient.
+        7. Box plot of Custom Min vs Professional Min differences by price range.
+        8. Box plot of Custom Max vs Professional Max differences by price range.
+        """
+        bins = [0, 100, 1000, 2000, 5000]
+        labels = ["Low", "Medium", "High", "Very High"]
+
+        # Add price range column
+        results_df["Price Range"] = pd.cut(
+            results_df["Predicted"], bins=bins, labels=labels
+        )
+
+        # Group by price range and calculate the mean percentage differences
+        avg_min_diff = (
+            results_df.groupby("Price Range", observed=True)[
+                "Custom Min vs Professional Min Diff"
+            ].mean()
+            * 100
+        )
+        avg_max_diff = (
+            results_df.groupby("Price Range", observed=True)[
+                "Custom Max vs Professional Max Diff"
+            ].mean()
+            * 100
+        )
+        avg_min_abs_percentage_diff = results_df.groupby("Price Range", observed=True)[
+            "Custom Min Absolute Percentage Difference"
+        ].mean()
+        avg_max_abs_percentage_diff = results_df.groupby("Price Range", observed=True)[
+            "Custom Max Absolute Percentage Difference"
+        ].mean()
+
+        fig, axes = plt.subplots(4, 2, figsize=(16, 24))
+        fig.suptitle(f"Custom vs Professional Metrics - {table_name}", fontsize=16)
+
+        # Plot 1: Custom Min vs Professional Min (%)
+        axes[0, 0].bar(
+            avg_min_diff.index,
+            avg_min_diff,
+            color="skyblue",
+            edgecolor="black",
+        )
+        axes[0, 0].set_title("Custom Min vs Professional Min (%)")
+        axes[0, 0].set_xlabel("Price Range")
+        axes[0, 0].set_ylabel("Average Percentage Difference (%)")
+        axes[0, 0].grid(axis="y", linestyle="--", alpha=0.7)
+
+        # Plot 2: Custom Max vs Professional Max (%)
+        axes[0, 1].bar(
+            avg_max_diff.index,
+            avg_max_diff,
+            color="lightcoral",
+            edgecolor="black",
+        )
+        axes[0, 1].set_title("Custom Max vs Professional Max (%)")
+        axes[0, 1].set_xlabel("Price Range")
+        axes[0, 1].set_ylabel("Average Percentage Difference (%)")
+        axes[0, 1].grid(axis="y", linestyle="--", alpha=0.7)
+
+        # Plot 3: Custom Min Absolute Percentage Difference
+        axes[1, 0].bar(
+            avg_min_abs_percentage_diff.index,
+            avg_min_abs_percentage_diff,
+            color="lightgreen",
+            edgecolor="black",
+        )
+        axes[1, 0].set_title("Custom Min Absolute Percentage Difference")
+        axes[1, 0].set_xlabel("Price Range")
+        axes[1, 0].set_ylabel("Average Absolute Percentage Difference (%)")
+        axes[1, 0].grid(axis="y", linestyle="--", alpha=0.7)
+
+        # Plot 4: Custom Max Absolute Percentage Difference
+        axes[1, 1].bar(
+            avg_max_abs_percentage_diff.index,
+            avg_max_abs_percentage_diff,
+            color="gold",
+            edgecolor="black",
+        )
+        axes[1, 1].set_title("Custom Max Absolute Percentage Difference")
+        axes[1, 1].set_xlabel("Price Range")
+        axes[1, 1].set_ylabel("Average Absolute Percentage Difference (%)")
+        axes[1, 1].grid(axis="y", linestyle="--", alpha=0.7)
+
+        # Plot 5: Scatter plot of Custom Min vs Professional Min with color gradient
+        min_diff = abs(
+            results_df["Custom Min Estimate"] - results_df["Estimated Minimum Price"]
+        )
+        scatter = axes[2, 0].scatter(
+            results_df["Estimated Minimum Price"],
+            results_df["Custom Min Estimate"],
+            c=min_diff,
+            cmap="coolwarm",
+            alpha=0.7,
+        )
+        axes[2, 0].plot(
+            [
+                results_df["Estimated Minimum Price"].min(),
+                results_df["Estimated Minimum Price"].max(),
+            ],
+            [
+                results_df["Estimated Minimum Price"].min(),
+                results_df["Estimated Minimum Price"].max(),
+            ],
+            color="green",
+            linestyle="--",
+            label="Perfect Correlation",
+        )
+        axes[2, 0].set_title("Custom Min vs Professional Min")
+        axes[2, 0].set_xlabel("Professional Minimum Price")
+        axes[2, 0].set_ylabel("Custom Minimum Price")
+        axes[2, 0].legend()
+        axes[2, 0].grid(axis="both", linestyle="--", alpha=0.7)
+        fig.colorbar(scatter, ax=axes[2, 0], label="Absolute Difference")
+
+        # Plot 6: Scatter plot of Custom Max vs Professional Max with color gradient
+        max_diff = abs(
+            results_df["Custom Max Estimate"] - results_df["Estimated Maximum Price"]
+        )
+        scatter = axes[2, 1].scatter(
+            results_df["Estimated Maximum Price"],
+            results_df["Custom Max Estimate"],
+            c=max_diff,
+            cmap="coolwarm",
+            alpha=0.7,
+        )
+        axes[2, 1].plot(
+            [
+                results_df["Estimated Maximum Price"].min(),
+                results_df["Estimated Maximum Price"].max(),
+            ],
+            [
+                results_df["Estimated Maximum Price"].min(),
+                results_df["Estimated Maximum Price"].max(),
+            ],
+            color="green",
+            linestyle="--",
+            label="Perfect Correlation",
+        )
+        axes[2, 1].set_title("Custom Max vs Professional Max")
+        axes[2, 1].set_xlabel("Professional Maximum Price")
+        axes[2, 1].set_ylabel("Custom Maximum Price")
+        axes[2, 1].legend()
+        axes[2, 1].grid(axis="both", linestyle="--", alpha=0.7)
+        fig.colorbar(scatter, ax=axes[2, 1], label="Absolute Difference")
+
+        # Plot 7: Box plot of Custom Min vs Professional Min differences by price range
+        sns.boxplot(
+            x="Price Range",
+            y="Custom Min vs Professional Min Diff",
+            data=results_df,
+            ax=axes[3, 0],
+            color="skyblue",
+        )
+        axes[3, 0].set_title("Custom Min vs Professional Min Differences")
+        axes[3, 0].set_xlabel("Price Range")
+        axes[3, 0].set_ylabel("Percentage Difference")
+        axes[3, 0].grid(axis="y", linestyle="--", alpha=0.7)
+
+        # Plot 8: Box plot of Custom Max vs Professional Max differences by price range
+        sns.boxplot(
+            x="Price Range",
+            y="Custom Max vs Professional Max Diff",
+            data=results_df,
+            ax=axes[3, 1],
+            color="lightcoral",
+        )
+        axes[3, 1].set_title("Custom Max vs Professional Max Differences")
+        axes[3, 1].set_xlabel("Price Range")
+        axes[3, 1].set_ylabel("Percentage Difference")
+        axes[3, 1].grid(axis="y", linestyle="--", alpha=0.7)
+
+        # Adjust layout and show the plot
+        plt.tight_layout(rect=[0, 0.05, 1, 0.95])
+        plt.subplots_adjust(hspace=0.4)
+        if table_name != "Table 3":
             plt.show(block=False)
+        else:
+            plt.show()
