@@ -128,12 +128,12 @@ def predict_price(
 
         predictor.save_model(model_path)
 
-    predictor.evaluate_custom_estimates(prediction_results)
-    predicted_price = predictor.predict_random_paintings(data_df, count=100)
+    # predictor.evaluate_custom_estimates(prediction_results)
+    # predicted_price = predictor.predict_random_paintings(data_df, count=100)
 
-    # predicted_price = predictor.predict_single_painting(painting_data_dict)
-    # print(f'Random Painting Sold Price: {painting_data_dict["Sold Price"]}')
-    # print(f"Predicted Sold Price: {predicted_price:.2f}")
+    predicted_price = predictor.predict_single_painting(painting_data_dict)
+    print(f'Random Painting Sold Price: {painting_data_dict["Sold Price"]}')
+    print(f"Predicted Sold Price: {predicted_price:.2f}")
 
     return predicted_price
 
@@ -298,6 +298,14 @@ if __name__ == "__main__":
         random_painting_data = (
             data_for_prediction_df.sample(n=1, random_state=21).iloc[0].to_dict()
         )
+        # random_painting_data = (
+        #     data_for_prediction_df[
+        #         (data_for_prediction_df["Artist name"] == "Tom BYRNE")
+        #         & (data_for_prediction_df["Painting name"] == "Eminem")
+        #     ]
+        #     .iloc[0]
+        #     .to_dict()
+        # )
 
         predicted_price = predict_price(
             predictor,
