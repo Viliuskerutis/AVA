@@ -238,7 +238,7 @@ class BasePredictor(ABC):
         features_df.index.name = "Photo id"
 
         if not hasattr(self, "pca"):
-            self.pca = PCA(n_components=self.use_images)
+            self.pca = PCA(n_components=self.use_images, random_state=42)
         reduced_features = self.pca.fit_transform(features_df)
         reduced_features_df = pd.DataFrame(
             reduced_features,
@@ -279,9 +279,11 @@ class BasePredictor(ABC):
             embeddings = self.model.encode(descriptions.tolist()).astype("float32")
 
         if self.use_separate_numeric_features:
+            numeric_columns = sorted(numeric_columns)
             if not hasattr(self, "scaler"):
                 self.scaler = StandardScaler()
-            numeric_data = self.scaler.fit_transform(df[numeric_columns])
+                self.scaler.fit(df[numeric_columns])
+            numeric_data = self.scaler.transform(df[numeric_columns])
             return np.hstack((embeddings, numeric_data))
 
         return embeddings
@@ -353,6 +355,14 @@ class BasePredictor(ABC):
                 df.loc[missing_mask, "count"] = df.loc[missing_mask, "Artist name"].map(
                     artist_counts
                 )
+                PropertyModifier.save_missing_data_to_csv(
+                    df=df[missing_mask],
+                    csv_path=self.artist_count_path,
+                    df_key_column="Artist name",
+                    csv_key_column="name",
+                    missing_column="count",
+                    verbose=True,
+                )
 
         if self.use_synthetic:
             df, synth_text, synth_numeric = PropertyModifier.add_additional_data(
@@ -401,11 +411,6 @@ class BasePredictor(ABC):
             )
             self.additional_text_columns += artsy_text
             self.additional_numeric_columns += artsy_numeric
-
-        # TODO: Move hardcoded values
-        if self.use_count:
-            # Additional filtering to keep relevant artists only (with no less than `min_artwork_count`)
-            df = process_keep_relevant(df, min_artwork_count=None, verbose=False)
 
         # Fill missing values with "Unknown" or -1 based on the column type
         df = ensure_data_filled_and_correct(df)
