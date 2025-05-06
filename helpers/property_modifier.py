@@ -138,3 +138,45 @@ class PropertyModifier:
         df = df.reset_index(drop=True)
 
         return df, extra_text_cols, extra_numeric_cols
+
+    @staticmethod
+    def save_missing_data_to_csv(
+        df: pd.DataFrame,
+        csv_path: str,
+        df_key_column: str,
+        csv_key_column: str,
+        missing_column: str,
+        verbose: bool = False,
+    ) -> None:
+        """
+        Appends rows with missing values in the specified column to the CSV file.
+
+        Args:
+            df (pd.DataFrame): The DataFrame containing the missing data.
+            csv_path (str): The path to the CSV file to update.
+            df_key_column (str): The column in the DataFrame used as the key.
+            csv_key_column (str): The column in the CSV file used as the key.
+            missing_column (str): The column containing the missing values to append.
+            verbose (bool): Whether to print detailed logs.
+        """
+        # Load the existing data from the CSV file
+        existing_data = FileManager.read_single_csv(csv_path, separator=";")
+
+        # Filter rows with missing values in the specified column
+        missing_data = df[[df_key_column, missing_column]].dropna(
+            subset=[missing_column]
+        )
+
+        # Rename df_key_column to match csv_key_column for merging
+        missing_data = missing_data.rename(columns={df_key_column: csv_key_column})
+
+        # Ensure no duplicates are added by checking against existing data
+        merged_data = pd.concat([existing_data, missing_data]).drop_duplicates(
+            subset=[csv_key_column]
+        )
+
+        # Save the updated data back to the CSV file
+        merged_data.to_csv(csv_path, index=False, sep=";")
+
+        if verbose:
+            print(f"Appended {len(missing_data)} rows to {csv_path}.")
