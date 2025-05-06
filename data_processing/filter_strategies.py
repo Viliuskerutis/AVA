@@ -87,7 +87,11 @@ class EnsureDataFilledAndCorrectFilter(BaseFilter):
             # Check for boolean columns: if all non-null values are 'true'/'false' (case insensitive)
             unique_vals = df[col].dropna().unique()
             lower_vals = {str(val).strip().lower() for val in unique_vals}
-            if lower_vals.issubset({"true", "false", "unknown"}) and lower_vals:
+            if (
+                lower_vals.issubset({"true", "false", "unknown"})
+                and lower_vals
+                and lower_vals != {"unknown"}
+            ):
                 df[col] = (
                     df[col]
                     .astype(str)
