@@ -397,9 +397,14 @@ class PaintingPricePredictor(BasePredictor):
             if col not in df.columns:
                 expected_dtype = self.regressor.feature_types[col]
                 if pd.api.types.is_numeric_dtype(expected_dtype):
-                    df[col] = -1
+                    if col.startswith("Surface_") or col.startswith("Materials_"):
+                        df[col] = 0
+                    else:
+                        df[col] = -1
                     if col not in self.NUMERIC_COLUMNS:
                         self.additional_numeric_columns.append(col)
+                elif pd.api.types.is_bool_dtype(expected_dtype):
+                    df[col] = False
                 else:
                     df[col] = "Unknown"
                     if col not in self.TEXT_COLUMNS:

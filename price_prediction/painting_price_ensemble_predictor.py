@@ -314,6 +314,8 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
         # Include Estimated Min and Max Prices in the results DataFrame
         result_df = pd.DataFrame(
             {
+                "Artist Name": df_test["Artist name"].values,
+                "Painting Name": df_test["Painting name"].values,
                 "Actual": y_test.values,
                 "Predicted": y_pred,
                 "Estimated Minimum Price": df_test["Estimated Minimum Price"].values,
@@ -472,9 +474,14 @@ class PaintingPriceEnsemblePredictor(BasePredictor):
             if col not in df.columns:
                 expected_dtype = self.regressors[0].feature_types[col]
                 if pd.api.types.is_numeric_dtype(expected_dtype):
-                    new_columns[col] = -1
+                    if col.startswith("Surface_") or col.startswith("Materials_"):
+                        new_columns[col] = 0
+                    else:
+                        new_columns[col] = -1
                     if col not in self.NUMERIC_COLUMNS:
                         self.additional_numeric_columns.append(col)
+                elif pd.api.types.is_bool_dtype(expected_dtype):
+                    new_columns[col] = False
                 else:
                     new_columns[col] = "Unknown"
                     if col not in self.TEXT_COLUMNS:
