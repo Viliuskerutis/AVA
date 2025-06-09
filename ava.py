@@ -162,13 +162,13 @@ def upload_file():
             # This should be the user painting information from UI (temporarily picking random value)
             random_painting_data = data_for_prediction_df.sample(n=1).iloc[0].to_dict()
 
-            predicted_price = predict_price(
+            predicted_price = int(round(predict_price(
             predictor,
             data_for_prediction_df,
             random_painting_data,
             use_test_split=True,
             force_retrain=False,
-        )
+        )))
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -177,7 +177,7 @@ def upload_file():
     
     return jsonify(
 	{"data": None if most_similar is None else json.loads(most_similar.to_json(orient='records', force_ascii=False)),
-    "price": most_similar["Sold Price"].values[0] if most_similar is not None else predicted_price,
+    "price": most_similar["Sold Price"].values[0] if most_similar is not None else f"€{predicted_price}",
     "message": "Exact image found inside the storage" if most_similar is not None else "Image price evaluated successfully"}), 200
 
 # Start the server
