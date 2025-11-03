@@ -67,7 +67,7 @@ from price_prediction.regressors.weighted_knn_regressor import WeightedKNNRegres
 app = Flask(__name__)
 
 # Enable CORS for specific origins
-CORS(app, origins=["http://localhost:5173", "https://voi.lt", "https://artvaluation.app"])
+CORS(app, origins=["http://localhost:5173", "https://voi.lt", "https://www.artvaluation.app", "https://artvaluation.app"])
 
 # Folder to save uploaded images
 UPLOAD_FOLDER = 'data/images/runtime'
@@ -160,6 +160,7 @@ def upload_file():
             )
 
             # This should be the user painting information from UI (temporarily picking random value)
+            # f"€{predicted_price}" "Image price evaluated successfully"
             random_painting_data = data_for_prediction_df.sample(n=1).iloc[0].to_dict()
 
             predicted_price = int(round(predict_price(
@@ -177,8 +178,8 @@ def upload_file():
     
     return jsonify(
 	{"data": None if most_similar is None else json.loads(most_similar.to_json(orient='records', force_ascii=False)),
-    "price": most_similar["Sold Price"].values[0] if most_similar is not None else f"€{predicted_price}",
-    "message": "Exact image found inside the storage" if most_similar is not None else "Image price evaluated successfully"}), 200
+    "price": most_similar["Sold Price"].values[0] if most_similar is not None else "Insufficient data for prediction",
+    "message": "Exact image found inside the storage" if most_similar is not None else "Need more information to estimate"}), 200
 
 # Start the server
 if __name__ == '__main__':
